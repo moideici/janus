@@ -183,6 +183,10 @@ Deux chemins, dont un seul suffit, comme au document 04 :
   - L'écriture demanderait de revenir au début du fichier pour y placer les étiquettes. La sortie devrait donc permettre les déplacements (`Seek`), ou bien les étiquettes devraient aller en fin de fichier.
   - Le format changerait.
 - *Recommandation :* **ne pas le faire pour l'instant**. Le gain est réel mais modeste, et une sauvegarde suffit à se prémunir contre l'effacement.
+- **Décision (gel du format, 19 novembre 2026) : non, pas en v1.**
+  - Aucune notion de sécurité ne change : la confidentialité active reste IND-RCCA, avec ou sans QI-1, à cause des autres étiquettes.
+  - Le coût, lui, touche tout le monde, à chaque ouverture : un second passage sur tout le fichier, ou une sortie qui permet les déplacements. Le chiffrement dans un tube (`janus chiffrer … -`) deviendrait impossible sans tout garder en mémoire.
+  - L'effacement silencieux du secret reste possible : c'est le piège 10.9 du document 03, et la parade reste une copie de sauvegarde.
 
 ---
 

@@ -24,14 +24,14 @@ use std::process::ExitCode;
 use zeroize::Zeroizing;
 
 const AVERTISSEMENT: &str =
-    "Prototype de recherche : format non figé, ne pas l'utiliser pour de vrais secrets.";
+    "Prototype de recherche non audité : ne pas l'utiliser pour de vrais secrets.";
 const TAMPON: usize = 1 << 20;
 
 /// Version du programme et du format, affichée par `janus --version`.
 fn version() -> String {
     format!(
-        "janus {} (format Janus v1, aperçu non figé : un fichier chiffré avec cette version \
-         pourrait ne plus s'ouvrir avec une version suivante)",
+        "janus {} (format Janus v1, candidat au gel : il ne changerait plus que pour corriger \
+         une faille trouvée par une relecture ou un audit)",
         env!("CARGO_PKG_VERSION")
     )
 }
@@ -472,7 +472,7 @@ fn lire_texte(chemin: &Path) -> Result<Zeroizing<String>, String> {
 fn lire_identite(chemin: &Path) -> Result<Identite, String> {
     let t = lire_texte(chemin)?;
     t.lines()
-        .find(|l| l.starts_with(cles::PREFIXE_SECRETE))
+        .find(|l| cles::est_ligne_secrete(l))
         .and_then(cles::secrete_depuis_texte)
         .ok_or_else(|| format!("{} : identité illisible", chemin.display()))
 }

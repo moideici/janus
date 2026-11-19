@@ -1,11 +1,13 @@
 # Janus v0 : spécification du format
 
-> **Statut : brouillon 0.2 du 18 novembre 2026 (prototype Rust : janus-rs/).** Le format n'est **pas figé**. Il ne le sera qu'une fois réunies trois conditions :
-> - les questions ouvertes du § 12 sont tranchées ;
+> **Statut : format v1 candidat au gel depuis le 19 novembre 2026 (prototype Rust : janus-rs/).** Les trois conditions posées sont réunies :
+> - les questions de format du § 12 sont tranchées ;
 > - une implémentation de référence en Rust existe ;
-> - les vecteurs de test sont publiés.
+> - les vecteurs de test sont publiés, pour les fichiers et pour l'encodage des clés.
 >
-> Les fichiers produits avant ce gel pourront devenir illisibles.
+> Aucun changement n'est plus prévu. Le format ne bougerait encore que si une relecture ou un audit y trouvait une faille ; il ne sera **définitivement gelé qu'en v1.0** (voir [07-plan-release.md](07-plan-release.md)). Les fichiers de l'aperçu v0.1.0-alpha (2 étiquettes) ne s'ouvrent pas avec ce format.
+>
+> Ce document décrit la base v0 ; le format v1 ajoute la réserve et les étiquettes multiples ([03-deux-visages.md](03-deux-visages.md)).
 >
 > Ce document s'appuie sur [la cartographie](01-cartographie.md), et notamment sur ses exigences J-01 à J-11. Les encadrés **« En clair »** expliquent chaque choix sans jargon.
 
@@ -74,7 +76,11 @@ Les étiquettes de dérivation sont en ASCII, sans accents :
 - **Algorithme** : X-Wing (`draft-connolly-cfrg-xwing-kem-11`), c'est-à-dire ML-KEM-768 combiné à X25519.
 - **Identité (clé secrète)** : une graine de 32 octets, `aléa(32)`. Toute la paire de clés en est déduite, comme le prévoit X-Wing.
 - **Clé publique** : 1216 octets, soit `pk_M` (1184) suivi de `pk_X` (32).
-- **Encodage texte** : provisoire, voir Q7.
+- **Encodage texte** (Q7, figé) : **Bech32m** (BIP 350), comme age.
+  - Identité : préfixe `JANUS-SECRET-KEY-`, en majuscules, sur la graine de 32 octets. 76 caractères : sous la limite de 90 de Bech32, la somme de contrôle garantit la détection de 4 fautes de frappe au plus, utile pour une sauvegarde sur papier.
+  - Clé publique : préfixe `janus`, en minuscules (`janus1…`), sur les 1216 octets. 1958 caractères : comme age, on lève la limite de 90 ; une erreur aléatoire n'échappe à la somme de contrôle qu'avec une probabilité de 2⁻³⁰.
+  - Le préfixe distingue les deux types. Une future version des clés changera de préfixe, sans champ de version (J-09).
+  - Vecteurs : `janus-rs/vecteurs/cles.json`.
 
 ### 3.2 Mot de passe
 
@@ -301,7 +307,7 @@ Cette construction est STREAM (labo 8.1). Le nonce est un simple compteur, ce qu
 | J-08 Paramètres bornés | Argon2id fixe ; 16 emplacements ; blocs de 64 Kio |
 | J-09 Aucune agilité | Aucun champ d'algorithme ; la version est dans les étiquettes |
 | J-10 Hygiène mémoire | § 9.1, étape 6, et § 9.2, étape 7 |
-| J-11 Vecteurs de test | 6 vecteurs publiés dans `janus-rs/vecteurs/` (fichiers `.janus` et `manifeste.json`) |
+| J-11 Vecteurs de test | 8 fichiers publiés dans `janus-rs/vecteurs/` (`.janus` et `manifeste.json`), plus l’encodage des clés (`cles.json`) |
 
 ---
 
@@ -311,14 +317,14 @@ Cette construction est STREAM (labo 8.1). Le nonce est un simple compteur, ce qu
 |---|---|---|
 | Q1 | ~~Position de l’étiquette dans le combineur X-Wing~~ | **Résolue** : à la fin (draft-11). Le prototype reproduit le vecteur de test n° 1 du draft |
 | Q2 | Le point « sale » d'Elligator conserve-t-il la sécurité d'X-Wing ? | **En partie résolue** : oui pour IND-CPA dans le modèle de l'oracle aléatoire ([04-preuve-deux-visages.md](04-preuve-deux-visages.md), étape G₂). IND-CCA reste à prouver. La preuve a aussi montré que l'éphémère doit être tiré **uniformément modulo ℓ**, et non clampé (§ 7.1 du même document). *Corrigé dans le code le 18 novembre 2026.* |
-| Q3 | Kemeleon n'est qu'un draft (version 02) : tailles et algorithme peuvent changer | Figer la version citée, prévoir v0 → v0.1 |
-| Q4 | Quelle est la fuite exacte du bourrage « PADMÉ aléatoire » ? | Calculer l'information mutuelle par rapport à PADMÉ pur |
-| Q5 | 16 emplacements (26 Kio) ou 8 (13 Kio) ? | 16 laisse de la place aux politiques d'accès de la v1 |
-| Q6 | Calibrer Argon2id (64 Mio, t = 3) ou passer à la première configuration de la RFC 9106 (2 Gio) ? | Mesurer sur tes machines |
-| Q7 | Encodage texte des clés (Bech32m sans limite comme age, ou base64 avec somme de contrôle) ? | Bech32m, pour détecter les fautes de frappe |
+| Q3 | Kemeleon n'est qu'un draft (version 02) : tailles et algorithme peuvent changer | **Tranchée (gel)** : Janus v1 suit `draft-irtf-cfrg-kemeleon-02`, variante par défaut, tel que décrit au § 5 et fixé par les vecteurs de test. Une évolution du draft ne change pas Janus v1 |
+| Q4 | Quelle est la fuite exacte du bourrage « PADMÉ aléatoire » ? | **Règle figée**, analyse à faire : calculer l'information mutuelle par rapport à PADMÉ pur. L'analyse ne changerait le format que si elle révélait une faille |
+| Q5 | 16 emplacements (26 Kio) ou 8 (13 Kio) ? | **Tranchée (gel)** : 16. Le nombre de destinataires d'un fichier reste caché jusqu'à 16, et l'en-tête de 26 Kio pèse peu à côté de la réserve de 64 Kio |
+| Q6 | Calibrer Argon2id (64 Mio, t = 3) ou passer à la première configuration de la RFC 9106 (2 Gio) ? | **Tranchée (gel)** : 64 Mio, t = 3, p = 4 (seconde configuration de la RFC 9106). 2 Gio exclurait les téléphones et les petites machines, et un fichier doit s'ouvrir partout. Pour un secret important, la vraie protection est un mot de passe long, ou une clé |
+| Q7 | Encodage texte des clés (Bech32m sans limite comme age, ou base64 avec somme de contrôle) ? | **Tranchée (gel)** : Bech32m, § 3.1. Les identités de l'aperçu v0.1.0-alpha (`JANUS-SECRET-V0-…`) restent lisibles jusqu'à la v1.0, le temps de migrer |
 | Q8 | Bibliothèques Rust | **En partie résolue** : `ml-kem` 0.3 (RustCrypto, zeroize), `curve25519-elligator2` (variante `Randomized` = point sale), Kemeleon écrit par nous **en temps constant** (dudect : aucune fuite détectée, témoin num-bigint détecté). Reste à évaluer libcrux (vérifié formellement) |
-| Q9 | Le temps d'ouverture révèle-t-il l'emplacement trouvé ? | Essayer les 16 emplacements dans tous les cas |
-| Q10 | Le draft Kemeleon ne fixe pas l’ordre des octets de VectorEncode | Gros-boutiste dans le prototype (comme la variante à rejet du draft) ; à confirmer avec les auteurs |
+| Q9 | Le temps d'ouverture révèle-t-il l'emplacement trouvé ? | **Résolue** : les 16 emplacements et les 4 étiquettes sont toujours essayés ; dudect ne détecte aucune fuite |
+| Q10 | Le draft Kemeleon ne fixe pas l’ordre des octets de VectorEncode | **Tranchée (gel)** : gros-boutiste, comme la variante à rejet du draft. À signaler aux auteurs, mais Janus v1 ne changera pas |
 
 ---
 

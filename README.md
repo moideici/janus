@@ -4,7 +4,7 @@
 
 **Un format de chiffrement de fichiers post-quantique, indistinguable de l'aléa, et à deux visages.**
 
-> ⚠️ **Prototype de recherche.** Le format n'est pas figé, le code n'a eu aucun audit externe, et les preuves de sécurité n'ont été relues par personne. **Ne l'utilise pas pour de vrais secrets.** Voir le [plan de release](docs/07-plan-release.md).
+> ⚠️ **Prototype de recherche.** Le format v1 est candidat au gel mais pas encore définitivement gelé, le code n'a eu aucun audit externe, et les preuves de sécurité n'ont été relues par personne. **Ne l'utilise pas pour de vrais secrets.** Voir le [plan de release](docs/07-plan-release.md).
 
 📖 Documentation complète : **[docs.moideici.tech/janus](https://docs.moideici.tech/janus/)**
 
@@ -33,7 +33,7 @@ cargo build --release
 
 | Dossier | Contenu |
 |---|---|
-| [`janus-rs/`](janus-rs/README.md) | Le prototype en Rust : bibliothèque, ligne de commande `janus`, 61 tests, vecteurs de test, banc d'essai, test de temps constant (dudect) |
+| [`janus-rs/`](janus-rs/README.md) | Le prototype en Rust : bibliothèque, ligne de commande `janus`, 66 tests, vecteurs de test, banc d'essai, test de temps constant (dudect) |
 | [`docs/`](docs/) | La conception et les preuves, de la cartographie au plan de release (voir ci-dessous) |
 
 ### Documents

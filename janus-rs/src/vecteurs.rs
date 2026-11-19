@@ -205,3 +205,61 @@ fn vecteurs_reproductibles_et_ouvrables() {
     let m = std::fs::read_to_string(dossier().join("manifeste.json")).unwrap();
     assert_eq!(m, manifeste(&generes), "manifeste désynchronisé");
 }
+
+/// Vecteurs de l'encodage texte des clés (Q7, Bech32m), dans `vecteurs/cles.json` :
+/// pour chaque graine, l'identité et la clé publique attendues, caractère pour caractère.
+fn manifeste_cles() -> String {
+    let graines: [(&str, [u8; 32]); 3] = [
+        ("32 octets valant 0x01 (destinataire 0 des vecteurs de fichiers)", graine(0)),
+        ("32 octets valant 0x02 (destinataire 1)", graine(1)),
+        ("octet k = k, pour k de 0 à 31", core::array::from_fn(|k| k as u8)),
+    ];
+    let mut s = String::from(
+        "{\n  \"encodage\": \"Bech32m (BIP 350). Identité : préfixe JANUS-SECRET-KEY-, majuscules, graine X-Wing de 32 octets. \
+         Clé publique : préfixe janus, minuscules, pk_M (1184 octets) suivi de pk_X (32 octets), sans limite de longueur.\",\n  \
+         \"cles\": [\n",
+    );
+    for (n, (description, g)) in graines.iter().enumerate() {
+        let id = Identite::depuis_graine(g);
+        let _ = write!(
+            s,
+            "    {{\n      \"graine\": \"{}\",\n      \"description\": \"{description}\",\n      \"identite\": \"{}\",\n      \
+             \"cle_publique_hex_sha256\": \"{}\",\n      \"cle_publique\": \"{}\"\n    }}{}\n",
+            hex::encode(g),
+            *crate::cles::secrete_vers_texte(&id),
+            hex_sha256(id.cle_publique()),
+            crate::cles::publique_vers_texte(id.cle_publique()),
+            if n + 1 < graines.len() { "," } else { "" }
+        );
+    }
+    s.push_str("  ]\n}\n");
+    s
+}
+
+#[test]
+fn vecteurs_des_cles() {
+    let attendu = manifeste_cles();
+    let chemin = dossier().join("cles.json");
+    if std::env::var("JANUS_REGENERER_VECTEURS").is_ok() {
+        std::fs::write(&chemin, &attendu).unwrap();
+    }
+    let publie = std::fs::read_to_string(&chemin)
+        .expect("vecteurs absents : JANUS_REGENERER_VECTEURS=1 cargo test --release vecteurs");
+    assert_eq!(publie, attendu, "l'encodage des clés a changé");
+    // Le texte publié se relit vers la même paire de clés.
+    for (i, g) in [graine(0), graine(1)].iter().enumerate() {
+        let id = Identite::depuis_graine(g);
+        let ligne = |cle: &str| {
+            publie
+                .lines()
+                .filter(|l| l.contains(&format!("\"{cle}\"")))
+                .nth(i)
+                .and_then(|l| l.split('"').nth(3))
+                .unwrap()
+                .to_owned()
+        };
+        let lu = crate::cles::secrete_depuis_texte(&ligne("identite")).unwrap();
+        assert_eq!(lu.cle_publique(), id.cle_publique());
+        assert_eq!(&crate::cles::publique_depuis_texte(&ligne("cle_publique")).unwrap(), id.cle_publique());
+    }
+}

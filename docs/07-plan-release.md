@@ -8,8 +8,7 @@ Une release invite d'autres personnes à utiliser l'outil, et à garder des fich
 
 1. **Le format bouge encore.**
    - Il a changé trois fois depuis le 18 novembre : passage aux deux visages, éphémère uniforme, masquage de `κ`. Les vecteurs de test ont été régénérés à chaque fois.
-   - L'encodage texte des clés est provisoire (spec, question Q7).
-   - Un choix reste ouvert : étiquette sur tout le corps ou non (QI-1). *QB-3 est tranché : 4 étiquettes (19 novembre 2026).*
+   - ~~L'encodage texte des clés est provisoire (Q7). Un choix reste ouvert : étiquette sur tout le corps ou non (QI-1).~~ *Tout est tranché depuis le 19 novembre 2026 : 4 étiquettes (QB-3), clés en Bech32m (Q7), pas d'étiquette sur tout le corps (QI-1). Le format v1 est candidat au gel.*
    - Un fichier chiffré aujourd'hui pourrait ne plus s'ouvrir demain.
 2. **Les tests n'ont tourné que sur une seule machine Windows.** Il n'y a ni intégration continue, ni compilation pour Linux et macOS.
 3. **Il manque des éléments de base pour un outil distribué :**
@@ -19,7 +18,26 @@ Une release invite d'autres personnes à utiliser l'outil, et à garder des fich
    - une politique de signalement des failles (`SECURITY.md`) ;
    - des binaires produits par l'intégration continue.
 
-Aucune de ces raisons n'est une faiblesse cryptographique connue. Les preuves (documents 04 à 06) et les tests (61, dont 50 000 puis, après QB-3, 30 000 mutations de fuzzing) sont en place. Ce qui manque relève de la stabilité et de l'outillage.
+Aucune de ces raisons n'est une faiblesse cryptographique connue. Les preuves (documents 04 à 06) et les tests (66, dont 50 000 puis, après QB-3, 30 000 mutations de fuzzing) sont en place. Ce qui manque relève de la stabilité et de l'outillage.
+
+## Gel du format v1 (19 novembre 2026)
+
+Toutes les questions de format sont tranchées. Le format v1 est **candidat au gel** : aucun changement n'est plus prévu, et il ne bougerait encore que si une relecture ou un audit y trouvait une faille. Il ne sera définitivement gelé qu'en v1.0.
+
+| Question | Décision | Où |
+|---|---|---|
+| QB-1 Réserve | `max(64 Kio, ⌈L₁/16⌉)` | 03, § 5 |
+| QB-2 Option « sans réserve » | Non | 03, § 14 |
+| QB-3 Nombre d'étiquettes | 4 : un leurre et jusqu'à 3 visages cachés | 03, § 14 |
+| QB-4 v1 remplace v0 | Oui | 03, § 14 |
+| QI-1 Étiquette sur tout le corps | Non | 06, § 6 |
+| Q3 Version de Kemeleon | `draft-irtf-cfrg-kemeleon-02`, figée par les vecteurs | 02, § 12 |
+| Q5 Nombre d'emplacements | 16 | 02, § 12 |
+| Q6 Argon2id | 64 Mio, t = 3, p = 4 | 02, § 3.2 |
+| Q7 Encodage des clés | Bech32m, préfixes `janus` et `JANUS-SECRET-KEY-` | 02, § 3.1 |
+| Q10 Ordre des octets de Kemeleon | Gros-boutiste | 02, § 12 |
+
+Restent ouvertes des questions de **preuve**, pas de format : IND-CCA du point sale (Q2), fuite exacte du bourrage (Q4), vérification par machine, modèle quantique de l'oracle aléatoire.
 
 ## Les étapes
 
@@ -40,9 +58,9 @@ Une **pré-release** GitHub, marquée comme telle, pour essayer Janus et le crit
 
 ### v0.2.0-alpha : stabiliser ce qui touche l'utilisateur
 
-- **Figer l'encodage texte des clés** (Q7) : préfixes versionnés et somme de contrôle définitive.
+- ~~**Figer l'encodage texte des clés** (Q7)~~ **Fait** : Bech32m, préfixes `janus` et `JANUS-SECRET-KEY-`, vecteurs dans `janus-rs/vecteurs/cles.json`.
 - **Lire l'entrée standard et écrire sur la sortie standard**, pour chiffrer dans un tube.
-- ~~**Trancher QB-3**~~ **Fait** : 4 étiquettes, jusqu'à 3 visages cachés. Reste **QI-1** (étiquette sur tout le corps).
+- ~~**Trancher QB-3**~~ **Fait** : 4 étiquettes, jusqu'à 3 visages cachés. ~~QI-1~~ **Tranché** : pas d'étiquette sur tout le corps en v1 (document 06, § 6).
 - ~~**Lire l'entrée standard et écrire sur la sortie standard**~~ **Fait**, avec l'ouverture en mémoire et `janus modifier`.
 - **Statistiques et fuzzing :** passer la batterie NIST STS, et lancer `cargo-fuzz` avec mesure de couverture (il faut la chaîne d'outils nightly, à installer avec ton accord).
 - **Comparer avec age** : débit, taille des fichiers, et ce que révèle `janus inspect`.

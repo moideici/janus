@@ -1,6 +1,6 @@
 # janus-rs : prototype de Janus v1 (deux visages)
 
-> ⚠️ **Prototype de recherche.** Le format n'est pas figé et le code n'a fait l'objet d'aucun audit externe. **Ne l'utilise pas pour de vrais secrets.**
+> ⚠️ **Prototype de recherche.** Le format v1 est candidat au gel (pas encore définitivement gelé) et le code n'a fait l'objet d'aucun audit externe. **Ne l'utilise pas pour de vrais secrets.**
 
 Ce dossier implémente la spécification [docs/02-spec-v0.md](../docs/02-spec-v0.md), modifiée par la conception des deux visages [docs/03-deux-visages.md](../docs/03-deux-visages.md). Un fichier peut s'ouvrir sur un **leurre** avec un premier identifiant et sur un **secret** avec un second. Tous les fichiers ont la même forme, qu'ils cachent un second visage ou non.
 
@@ -11,7 +11,7 @@ Toutes se lancent depuis `janus-rs/`.
 | Action | Commande |
 |---|---|
 | Compiler | `cargo build --release` |
-| Lancer les 61 tests | `cargo test --release` |
+| Lancer les 66 tests | `cargo test --release` |
 | Banc d'essai | `cargo run --release --example banc` |
 | Test de temps constant | `cargo run --release --example dudect` |
 | Longue campagne de fuzzing | `JANUS_FUZZ_ITER=100000 cargo test --release --test fuzz -- --nocapture` |
@@ -41,7 +41,7 @@ Précisions sur la ligne de commande :
 | `src/xwing.rs` | X-Wing draft-11 et encapsulation cachée (point sale uniforme, Elligator 2, Kemeleon, masquage de κ) | § 3.1, 6 |
 | `src/kemeleon.rs` | Kemeleon draft-02, **en temps constant** | § 6 |
 | `src/elligator.rs` | Inverse d'Elligator 2 pour un point quelconque, en temps constant (`fiat-crypto`) : permet un scalaire éphémère uniforme, non clampé | § 6, 04-preuve § 7.1 |
-| `src/cles.rs` | Encodage texte des clés (provisoire) | Q7 |
+| `src/cles.rs` | Encodage texte des clés : Bech32m, en temps constant pour l'identité | Q7 |
 | `src/inspect.rs` | `janus inspect` : radiographie défensive (age, gpg, ZIP, 7-Zip, LUKS, KeePass, openssl, Janus) | § 7, piste H |
 | `src/alea.rs` | Aléa du système uniquement ; flux déterministe réservé aux tests | § 2 |
 | `src/vecteurs.rs` | Génération et vérification des vecteurs de test | § 13.1 |

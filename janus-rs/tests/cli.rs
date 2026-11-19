@@ -181,3 +181,39 @@ fn quatre_visages_en_ligne_de_commande() {
     assert!(ouvrir(&v2, "trois").is_empty(), "le visage non fourni à modifier est perdu");
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// Q7 : parcours complet par clé (identité Bech32m), et identité de l'aperçu
+/// v0.1.0-alpha toujours lisible (la paire de clés ne change pas).
+#[test]
+fn cles_bech32m_de_bout_en_bout() {
+    let d = dossier("cles");
+    let (id, clair, chiffre) = (d.join("moi.cle"), d.join("clair.txt"), d.join("c.janus"));
+    let o = lancer(janus().arg("cles").arg(&id), None);
+    assert!(o.status.success(), "{}", stderr(&o));
+    let publique = String::from_utf8(o.stdout).unwrap();
+    assert!(publique.starts_with("janus1"));
+    let fichier_id = std::fs::read_to_string(&id).unwrap();
+    assert!(fichier_id.lines().any(|l| l.starts_with("JANUS-SECRET-KEY-1") && l.len() == 76));
+
+    let o = lancer(janus().arg("publique").arg(&id), None);
+    assert_eq!(String::from_utf8(o.stdout).unwrap(), publique);
+
+    std::fs::write(&clair, b"contenu par cle").unwrap();
+    let o = lancer(janus().args(["chiffrer", "-r", publique.trim()]).arg(&clair).arg(&chiffre), None);
+    assert!(o.status.success(), "{}", stderr(&o));
+    let o = lancer(janus().args(["dechiffrer", "-i"]).arg(&id).arg(&chiffre).arg("-"), None);
+    assert!(o.status.success(), "{}", stderr(&o));
+    assert_eq!(o.stdout, b"contenu par cle");
+
+    // Identité de l'aperçu, graine [7; 32] : base64url(graine ‖ SHA-256(préfixe ‖ graine)[..4]).
+    let ancienne = d.join("ancienne.cle");
+    std::fs::write(
+        &ancienne,
+        "# Identité Janus (PROTOTYPE)\nJANUS-SECRET-V0-BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBweWpeyT\n",
+    )
+    .unwrap();
+    let o = lancer(janus().arg("publique").arg(&ancienne), None);
+    assert!(o.status.success(), "identité de l'aperçu illisible : {}", stderr(&o));
+    assert!(String::from_utf8(o.stdout).unwrap().starts_with("janus1"));
+    let _ = std::fs::remove_dir_all(&d);
+}

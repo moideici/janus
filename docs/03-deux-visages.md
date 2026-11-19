@@ -272,8 +272,7 @@ Tout ce qui suit `--cache` décrit le visage caché : ses destinataires, puis so
 | N° | Question | Recommandation |
 |---|---|---|
 | **QB-1** | Taille de la réserve : fixe (64 Kio), `max(64 Kio, L₁/16)` ou `max(64 Kio, L₁/8)` ? | **Décidé le 18 novembre 2026 : `Réserve = max(64 Kio, ⌈L₁/16⌉)`**, soit `R_min` = 65 536 et `ρ` = 16. Environ 6 % de plus par fichier, de quoi cacher un document, et un secret de 64 Kio possible même derrière un petit leurre |
-| *QB-2 à QB-4* | *Recommandations ci-dessous adoptées provisoirement pour le prototype* | |
-| **QB-2** | Une option « sans réserve » ? Elle produirait des fichiers dont on peut prouver qu'ils n'ont pas de visage caché | Pas en v1. Si elle existe, la réserve doit rester le comportement par défaut, pour que « j'ai utilisé le réglage par défaut » reste une réponse crédible |
+| **QB-2** | Une option « sans réserve » ? Elle produirait des fichiers dont on peut prouver qu'ils n'ont pas de visage caché | **Tranchée (gel, 19 novembre 2026) : pas en v1.** Si elle existe, la réserve doit rester le comportement par défaut, pour que « j'ai utilisé le réglage par défaut » reste une réponse crédible |
 | **QB-3** | 2 ou 4 étiquettes (donc visages) ? | **Décidé le 19 novembre 2026 : 4 étiquettes**, soit un leurre et jusqu'à 3 visages cachés qui se partagent la réserve. Coût : 64 octets par fichier. *Recommandation initiale :* 2 pour v1, fidèle au nom. Le passage à 4 ne coûte que 64 octets et pourra se décider après le prototype |
-| **QB-4** | v1 remplace-t-il v0 ? | Oui : v0 n'est ni figé ni diffusé, et une structure unique est le cœur du déni |
+| **QB-4** | v1 remplace-t-il v0 ? | **Tranchée (gel) : oui.** v0 n'est ni figé ni diffusé, et une structure unique est le cœur du déni |
 | **QB-5** | Preuve formelle | **Rédigée : [04-preuve-deux-visages.md](04-preuve-deux-visages.md)** (preuve papier par séquence de jeux, non vérifiée par machine). Elle a révélé que le scalaire éphémère clampé du code casse le déni face à un adversaire quantique, et que la discrétion repose sur MLWE seul. Correctifs proposés au § 8 de ce document |
