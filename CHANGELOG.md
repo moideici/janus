@@ -4,7 +4,7 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), et les 
 
 ## [Non publié]
 
-## [0.1.0-alpha] — en préparation
+## [0.1.0-alpha] — 2026-11-19
 
 Premier aperçu public. Format **Janus v1**, non figé.
 

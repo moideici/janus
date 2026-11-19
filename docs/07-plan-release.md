@@ -29,14 +29,14 @@ Une **pré-release** GitHub, marquée comme telle, pour essayer Janus et le crit
 
 | Travail | Critère de fin | État (19 novembre 2026) |
 |---|---|---|
-| Intégration continue GitHub Actions : compilation, 56 tests, `clippy`, sous Linux, Windows et macOS | Les trois systèmes sont au vert | Écrite (`.github/workflows/ci.yml`) ; `clippy -D warnings` est propre en local |
+| Intégration continue GitHub Actions : compilation, 56 tests, `clippy`, sous Linux, Windows et macOS | Les trois systèmes sont au vert | **Fait** : au vert sur les trois systèmes (`.github/workflows/ci.yml`) |
 | `janus --version` et `janus --help`, avec la mention du format (« Janus v1, aperçu non figé ») | Les deux commandes répondent | **Fait** |
-| Binaires Linux, Windows et macOS produits par l'intégration continue à chaque étiquette `v*`, avec leurs empreintes SHA-256 | Le premier tag produit les trois binaires | Écrit (`.github/workflows/release.yml`), pas encore déclenché |
+| Binaires Linux, Windows et macOS produits par l'intégration continue à chaque étiquette `v*`, avec leurs empreintes SHA-256 | Le premier tag produit les trois binaires | **Fait** (`.github/workflows/release.yml`), déclenché par l'étiquette `v0.1.0-alpha` |
 | `CHANGELOG.md` et `SECURITY.md` | Les deux fichiers sont présents | **Fait** |
-| Notes de version claires : aperçu, format non figé, aucun audit, compatibilité non garantie | Texte relu | Écrites ([`notes-de-version/v0.1.0-alpha.md`](notes-de-version/v0.1.0-alpha.md)), à relire |
+| Notes de version claires : aperçu, format non figé, aucun audit, compatibilité non garantie | Texte relu | **Fait** ([`notes-de-version/v0.1.0-alpha.md`](notes-de-version/v0.1.0-alpha.md)) |
 | Vérification des licences des dépendances (MIT, Apache-2.0 ou BSD) | Liste jointe aux notes | **Fait** ([`licences-dependances.md`](licences-dependances.md)) : 65 crates, toutes compatibles |
 
-**Ce qui déclenche la release :** tous les critères ci-dessus remplis, puis ton accord explicite.
+**Ce qui déclenche la release :** tous les critères ci-dessus remplis, puis ton accord explicite. *Accord donné le 19 novembre 2026 : étiquette `v0.1.0-alpha` posée.*
 
 ### v0.2.0-alpha : stabiliser ce qui touche l'utilisateur
 
