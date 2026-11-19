@@ -278,8 +278,10 @@ fn lire_texte(chemin: &Path) -> Result<Zeroizing<String>, String> {
     let illisible = || format!("{} : encodage de texte non reconnu", chemin.display());
     let utf16 = |o: &[u8], le: bool| {
         let unites: Vec<u16> = o
-            .chunks_exact(2)
-            .map(|p| if le { u16::from_le_bytes([p[0], p[1]]) } else { u16::from_be_bytes([p[0], p[1]]) })
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|&p| if le { u16::from_le_bytes(p) } else { u16::from_be_bytes(p) })
             .collect();
         String::from_utf16(&unites).map_err(|_| illisible())
     };
