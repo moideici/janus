@@ -338,7 +338,7 @@ fn entree_de_longueur_inattendue() {
     let dest = || Destinataires::Cles(std::slice::from_ref(alice().cle_publique()));
     let essai = |annonce: u64, v: &mut Vec<u8>| {
         let principal = Visage { entree: &mut &clair[..], longueur: annonce, dest: dest() };
-        format::chiffrer_flux(principal, None, v)
+        format::chiffrer_flux(principal, Vec::new(), v)
     };
     assert!(essai(999, &mut v).is_err(), "entrée plus longue");
     v.clear();

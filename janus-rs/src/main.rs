@@ -15,10 +15,10 @@
 //! fournissent les mots de passe sans les demander.
 
 use janus::cles;
-use janus::format::{self, Destinataires, Ouverture, Visage};
+use janus::format::{self, Destinataires, MAX_CACHES, Ouverture, Visage};
 use janus::xwing::{Identite, TAILLE_PK};
 use std::fs::{self, File};
-use std::io::{BufReader, BufWriter, Write};
+use std::io::{self, BufReader, BufWriter, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use zeroize::Zeroizing;
@@ -49,6 +49,12 @@ Usage :
   janus dechiffrer (-i <fichier-identité>… | -m) <entrée> <sortie>
       Ouvre le visage qui correspond à l'identifiant donné. N'indique jamais si un
       autre visage existe.
+  janus modifier <ouverture> [--leurre <fichier>] <ancien> <nouveau> --cache <ouverture> [--secret <fichier>]
+      Rechiffre un fichier à plusieurs visages avec un aléa neuf, en exigeant
+      l'identifiant de CHAQUE visage, pour n'en perdre aucun. --leurre et --secret
+      remplacent le contenu d'un visage ; sinon il est conservé.
+      <ouverture> : -m (même mot de passe), ou -i <identité> plus d'éventuelles
+      clés -r/-R : le visage est rechiffré pour l'identité et ces clés.
   janus inspect <fichier>…
       Montre ce qu'un tiers apprend d'un fichier sans clé (Janus, gpg, age, ZIP, 7-Zip…).
   janus --version | --help
@@ -57,13 +63,19 @@ Usage :
   -r <clé publique>     clé publique en argument (répétable)
   -R <fichier>          clés publiques lues dans un fichier, une par ligne (répétable)
   -m                    mot de passe, demandé au clavier ; seul dans son visage
-  16 destinataires au plus, pour les deux visages réunis.
+  16 destinataires au plus, pour tous les visages réunis.
+
+<entrée> ou <sortie> valant - : entrée standard ou sortie standard.
+  Avec dechiffrer … -, tout est déchiffré et vérifié EN MÉMOIRE avant d'écrire
+  quoi que ce soit, et aucun fichier en clair n'est créé sur le disque :
+  janus dechiffrer -m coffre.janus - | less
 
 Exemples :
   janus cles moi.cle > moi.pub
   janus chiffrer -R moi.pub photo.jpg photo.janus
   janus chiffrer -m vacances.zip coffre.janus --cache -m journal.txt
   janus dechiffrer -m coffre.janus sortie
+  janus modifier -m --leurre vacances2.zip coffre.janus coffre2.janus --cache -m
 
 Documentation : https://docs.moideici.tech/janus/";
 
@@ -110,103 +122,157 @@ fn ecrire_atomique(sortie: &Path, ecrire: impl FnOnce(&mut File) -> Result<(), S
     res
 }
 
-/// Destinataires et fichiers d'un visage, lus sur la ligne de commande.
+/// Ce que la ligne de commande autorise selon la commande.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    Chiffrer,
+    Dechiffrer,
+    Modifier,
+}
+
+/// Destinataires, identités et fichiers d'un visage, lus sur la ligne de commande.
 #[derive(Default)]
 struct Arguments {
     cles: Vec<[u8; TAILLE_PK]>,
     identites: Vec<Identite>,
     mdp: bool,
+    /// `modifier` seulement : nouveau contenu du visage (--leurre ou --secret).
+    contenu: Option<String>,
     positionnels: Vec<String>,
 }
 
-fn analyser(args: &[String], chiffrer: bool) -> Result<Arguments, String> {
+fn analyser(args: &[String], mode: Mode) -> Result<Arguments, String> {
     let mut a = Arguments::default();
     let mut it = args.iter();
     while let Some(x) = it.next() {
         match x.as_str() {
-            "-r" if chiffrer => {
+            "-r" if mode != Mode::Dechiffrer => {
                 let t = it.next().ok_or("-r attend une clé")?;
                 a.cles.push(cles::publique_depuis_texte(t).ok_or("clé publique illisible")?);
             }
-            "-R" if chiffrer => {
+            "-R" if mode != Mode::Dechiffrer => {
                 let t = lire_texte(Path::new(it.next().ok_or("-R attend un fichier")?))?;
                 for ligne in t.lines().filter(|l| !l.trim().is_empty() && !l.starts_with('#')) {
                     a.cles.push(cles::publique_depuis_texte(ligne).ok_or("clé publique illisible")?);
                 }
             }
-            "-i" if !chiffrer => {
+            "-i" if mode != Mode::Chiffrer => {
                 a.identites.push(lire_identite(Path::new(it.next().ok_or("-i attend un fichier")?))?);
+            }
+            "--leurre" | "--secret" if mode == Mode::Modifier => {
+                a.contenu = Some(it.next().ok_or(format!("{x} attend un fichier"))?.clone());
             }
             "-m" => a.mdp = true,
             _ => a.positionnels.push(x.clone()),
         }
     }
-    if a.mdp && !a.cles.is_empty() {
+    if a.mdp && (!a.cles.is_empty() || !a.identites.is_empty()) {
         return Err("un mot de passe ne se combine pas avec des clés dans un même visage (règle R1)".into());
     }
     Ok(a)
 }
 
-fn ouvrir_entree(chemin: &str) -> Result<(BufReader<File>, u64), String> {
+/// Une entrée : un fichier lu en flux, ou l'entrée standard (`-`), lue
+/// entièrement en mémoire car Janus doit connaître sa longueur à l'avance.
+enum Entree {
+    Fichier(BufReader<File>),
+    Memoire(Cursor<Zeroizing<Vec<u8>>>),
+}
+
+impl Read for Entree {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            Entree::Fichier(f) => f.read(buf),
+            Entree::Memoire(m) => m.read(buf),
+        }
+    }
+}
+
+fn ouvrir_entree(chemin: &str) -> Result<(Entree, u64), String> {
+    if chemin == "-" {
+        let mut v = Zeroizing::new(Vec::new());
+        io::stdin().lock().read_to_end(&mut v).map_err(|e| format!("entrée standard : {e}"))?;
+        let n = v.len() as u64;
+        return Ok((Entree::Memoire(Cursor::new(v)), n));
+    }
     let f = File::open(chemin).map_err(|e| format!("{chemin} : {e}"))?;
     let taille = f.metadata().map_err(|e| e.to_string())?.len();
-    Ok((BufReader::with_capacity(TAMPON, f), taille))
+    Ok((Entree::Fichier(BufReader::with_capacity(TAMPON, f)), taille))
+}
+
+/// Variables d'environnement (tests seulement) et invites des mots de passe, par visage.
+const MDP_ENV: [&str; 4] = ["JANUS_MDP", "JANUS_MDP_CACHE", "JANUS_MDP_CACHE2", "JANUS_MDP_CACHE3"];
+const MDP_INVITE: [&str; 4] = [
+    "Mot de passe du leurre",
+    "Mot de passe du visage caché",
+    "Mot de passe du 2e visage caché",
+    "Mot de passe du 3e visage caché",
+];
+
+/// Découpe `… --cache … --cache …` en segments : le visage principal, puis chaque visage caché.
+fn segments(args: &[String]) -> (&[String], Vec<&[String]>) {
+    let mut parts = args.split(|a| a == "--cache");
+    let premier = parts.next().unwrap_or(&[]);
+    (premier, parts.collect())
 }
 
 fn chiffrer(args: &[String]) -> Result<(), String> {
-    let (avant, apres) = match args.iter().position(|a| a == "--cache") {
-        Some(p) => (&args[..p], Some(&args[p + 1..])),
-        None => (args, None),
-    };
-    let principal = analyser(avant, true)?;
+    let (avant, apres) = segments(args);
+    let principal = analyser(avant, Mode::Chiffrer)?;
     let [entree, sortie] = principal.positionnels.as_slice() else {
         return Err("il faut une entrée et une sortie".into());
     };
-    let cache = apres.map(|a| analyser(a, true)).transpose()?;
-    let entree_cachee = match &cache {
-        Some(c) => match c.positionnels.as_slice() {
-            [e] => Some(e.clone()),
-            _ => return Err("--cache attend ses destinataires puis une seule entrée".into()),
-        },
-        None => None,
-    };
-
-    let m1;
-    let dest1 = if principal.mdp {
-        m1 = lire_mdp("JANUS_MDP", "Mot de passe du leurre", true)?;
-        Destinataires::MotDePasse(m1.as_bytes())
-    } else {
-        Destinataires::Cles(&principal.cles)
-    };
-    let (mut lecteur1, longueur1) = ouvrir_entree(entree)?;
-    let m2;
-    let mut lecteur2 = None;
-    let mut visage_cache = None;
-    if let (Some(c), Some(e)) = (&cache, &entree_cachee) {
-        let dest2 = if c.mdp {
-            m2 = lire_mdp("JANUS_MDP_CACHE", "Mot de passe du visage caché", true)?;
-            Destinataires::MotDePasse(m2.as_bytes())
-        } else {
-            Destinataires::Cles(&c.cles)
-        };
-        let (l, n) = ouvrir_entree(e)?;
-        lecteur2 = Some(l);
-        visage_cache = Some((dest2, n));
+    let (entree, sortie) = (entree.clone(), sortie.clone());
+    let caches: Vec<Arguments> = apres.iter().map(|s| analyser(s, Mode::Chiffrer)).collect::<Result<_, _>>()?;
+    if caches.len() > MAX_CACHES {
+        return Err(format!("{MAX_CACHES} visage(s) caché(s) au plus"));
     }
-    ecrire_atomique(Path::new(sortie), |f| {
-        let mut w = BufWriter::with_capacity(TAMPON, &mut *f);
-        let principal = Visage { entree: &mut lecteur1, longueur: longueur1, dest: dest1 };
-        let cache = match (visage_cache, lecteur2.as_mut()) {
-            (Some((dest, longueur)), Some(l)) => Some(Visage { entree: l, longueur, dest }),
-            _ => None,
-        };
-        format::chiffrer_flux(principal, cache, &mut w).map_err(|e| e.to_string())?;
+    let mut entrees = vec![entree];
+    for c in &caches {
+        match c.positionnels.as_slice() {
+            [e] => entrees.push(e.clone()),
+            _ => return Err("--cache attend ses destinataires puis une seule entrée".into()),
+        }
+    }
+    if entrees.iter().filter(|e| *e == "-").count() > 1 {
+        return Err("une seule entrée peut venir de l'entrée standard (-)".into());
+    }
+
+    let mut specs = vec![principal];
+    specs.extend(caches);
+    let mdps: Vec<Option<Zeroizing<String>>> = specs
+        .iter()
+        .enumerate()
+        .map(|(i, s)| if s.mdp { lire_mdp(MDP_ENV[i], MDP_INVITE[i], true).map(Some) } else { Ok(None) })
+        .collect::<Result<_, _>>()?;
+    let mut lecteurs = Vec::new();
+    for e in &entrees {
+        lecteurs.push(ouvrir_entree(e)?);
+    }
+    let mut ecrire = |w: &mut dyn Write| -> Result<(), String> {
+        let mut visages = Vec::new();
+        for ((s, m), (lecteur, longueur)) in specs.iter().zip(&mdps).zip(lecteurs.iter_mut()) {
+            let dest = match m {
+                Some(m) => Destinataires::MotDePasse(m.as_bytes()),
+                None => Destinataires::Cles(&s.cles),
+            };
+            visages.push(Visage { entree: lecteur, longueur: *longueur, dest });
+        }
+        let principal = visages.remove(0);
+        let mut w = BufWriter::with_capacity(TAMPON, w);
+        format::chiffrer_flux(principal, visages, &mut w).map_err(|e| e.to_string())?;
         w.flush().map_err(|e| e.to_string())
-    })
+    };
+    if sortie == "-" {
+        // Un chiffré tronqué ne s'ouvrira pas : écrire en flux sur la sortie standard est sans risque.
+        ecrire(&mut io::stdout().lock())
+    } else {
+        ecrire_atomique(Path::new(&sortie), |f| ecrire(f))
+    }
 }
 
 fn dechiffrer(args: &[String]) -> Result<(), String> {
-    let a = analyser(args, false)?;
+    let a = analyser(args, Mode::Dechiffrer)?;
     let [entree, sortie] = a.positionnels.as_slice() else {
         return Err("il faut une entrée et une sortie".into());
     };
@@ -220,11 +286,114 @@ fn dechiffrer(args: &[String]) -> Result<(), String> {
         Ouverture::Identites(&a.identites)
     };
     let (mut lecteur, taille) = ouvrir_entree(entree)?;
-    ecrire_atomique(Path::new(sortie), |f| {
+    if sortie == "-" {
+        // Ouverture EN MÉMOIRE : rien n'est écrit tant que tout n'est pas vérifié
+        // (docs/06, § 5), et aucun fichier en clair n'est créé sur le disque.
+        let mut clair = Zeroizing::new(Vec::new());
+        format::dechiffrer_flux(&mut lecteur, taille, ouv, &mut *clair).map_err(|e| e.to_string())?;
+        let mut out = io::stdout().lock();
+        out.write_all(&clair).and_then(|_| out.flush()).map_err(|e| format!("sortie standard : {e}"))
+    } else {
+        ecrire_atomique(Path::new(sortie), |f| {
+            let mut w = BufWriter::with_capacity(TAMPON, &mut *f);
+            format::dechiffrer_flux(&mut lecteur, taille, ouv, &mut w).map_err(|e| e.to_string())?;
+            w.flush().map_err(|e| e.to_string())
+        })
+    }
+}
+
+/// `janus modifier` : rechiffre un fichier à plusieurs visages en exigeant TOUS
+/// les identifiants, pour qu'aucun visage caché ne soit perdu (piège 10.2), et
+/// en conseillant de changer aussi le leurre (piège 10.1).
+fn modifier(args: &[String]) -> Result<(), String> {
+    let (avant, apres) = segments(args);
+    if apres.is_empty() {
+        return Err("modifier exige l'identifiant de chaque visage caché (--cache) : sans eux, le nouveau \
+                    fichier les perdrait. Pour un fichier à un seul visage, chiffre simplement à nouveau"
+            .into());
+    }
+    let principal = analyser(avant, Mode::Modifier)?;
+    let [ancien, nouveau] = principal.positionnels.as_slice() else {
+        return Err("il faut l'ancien fichier puis le nouveau".into());
+    };
+    let (ancien, nouveau) = (ancien.clone(), nouveau.clone());
+    let mut specs = vec![principal];
+    for s in apres {
+        let a = analyser(s, Mode::Modifier)?;
+        if !a.positionnels.is_empty() {
+            return Err("après --cache : l'identifiant du visage caché, puis éventuellement --secret <fichier>".into());
+        }
+        specs.push(a);
+    }
+    if specs.len() > MAX_CACHES + 1 {
+        return Err(format!("{MAX_CACHES} visage(s) caché(s) au plus"));
+    }
+    let fichier = fs::read(&ancien).map_err(|e| format!("{ancien} : {e}"))?;
+    let mdps: Vec<Option<Zeroizing<String>>> = specs
+        .iter()
+        .enumerate()
+        .map(|(i, s)| if s.mdp { lire_mdp(MDP_ENV[i], MDP_INVITE[i], false).map(Some) } else { Ok(None) })
+        .collect::<Result<_, _>>()?;
+
+    // 1. Ouvrir chaque visage, et vérifier que chacun est bien à sa place.
+    let mut contenus = Vec::new();
+    for (i, (s, m)) in specs.iter().zip(&mdps).enumerate() {
+        let quel = if i == 0 { "le leurre".to_string() } else { format!("le visage caché n° {i}") };
+        let ouv = match m {
+            Some(m) => Ouverture::MotDePasse(m.as_bytes()),
+            None if s.identites.is_empty() => return Err(format!("{quel} : il faut -i <identité> ou -m")),
+            None => Ouverture::Identites(&s.identites),
+        };
+        let (clair, est_principal) = format::dechiffrer_visage(&fichier, ouv).map_err(|e| format!("{quel} : {e}"))?;
+        if est_principal != (i == 0) {
+            return Err(if i == 0 {
+                "l'identifiant donné en premier n'ouvre pas le leurre (visage principal)".into()
+            } else {
+                format!("l'identifiant de {quel} ouvre le leurre, pas un visage caché")
+            });
+        }
+        contenus.push(clair);
+    }
+    // 2. Remplacer les contenus demandés.
+    for (i, s) in specs.iter().enumerate() {
+        if let Some(c) = &s.contenu {
+            contenus[i] = Zeroizing::new(fs::read(c).map_err(|e| format!("{c} : {e}"))?);
+        }
+    }
+    if specs[0].contenu.is_none() {
+        eprintln!(
+            "Attention : le leurre n'a pas changé. Quelqu'un qui verrait l'ancienne et la nouvelle version \
+             pourrait se demander pourquoi un leurre identique a été rechiffré. Mieux vaut le modifier aussi (--leurre)."
+        );
+    }
+    // 3. Destinataires : le même mot de passe, ou l'identité donnée plus les clés ajoutées.
+    let cles: Vec<Vec<[u8; TAILLE_PK]>> = specs
+        .iter()
+        .map(|s| s.identites.iter().map(|id| *id.cle_publique()).chain(s.cles.iter().copied()).collect())
+        .collect();
+    if specs.iter().any(|s| !s.identites.is_empty()) {
+        eprintln!(
+            "Note : Janus ne connaît pas les autres destinataires éventuels d'un visage à clé. Le nouveau fichier \
+             est chiffré pour l'identité donnée, plus les clés ajoutées avec -r ou -R."
+        );
+    }
+    let mut lecteurs: Vec<&[u8]> = contenus.iter().map(|c| &c[..]).collect();
+    let mut visages = Vec::new();
+    for (i, lecteur) in lecteurs.iter_mut().enumerate() {
+        let dest = match &mdps[i] {
+            Some(m) => Destinataires::MotDePasse(m.as_bytes()),
+            None => Destinataires::Cles(&cles[i]),
+        };
+        visages.push(Visage { entree: lecteur, longueur: contenus[i].len() as u64, dest });
+    }
+    let principal = visages.remove(0);
+    ecrire_atomique(Path::new(&nouveau), |f| {
         let mut w = BufWriter::with_capacity(TAMPON, &mut *f);
-        format::dechiffrer_flux(&mut lecteur, taille, ouv, &mut w).map_err(|e| e.to_string())?;
+        format::chiffrer_flux(principal, visages, &mut w).map_err(|e| e.to_string())?;
         w.flush().map_err(|e| e.to_string())
-    })
+    })?;
+    eprintln!("{nouveau} : {} visage(s) rechiffré(s) avec un aléa neuf.", specs.len());
+    Ok(())
 }
 
 fn executer(args: &[String]) -> Result<(), String> {
@@ -267,6 +436,7 @@ fn executer(args: &[String]) -> Result<(), String> {
         }
         Some("chiffrer") => chiffrer(&args[1..]),
         Some("dechiffrer") => dechiffrer(&args[1..]),
+        Some("modifier") => modifier(&args[1..]),
         _ => Err(String::new()),
     }
 }

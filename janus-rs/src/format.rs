@@ -21,11 +21,14 @@ use zeroize::Zeroizing;
 // § 3 — constantes
 pub const N_EMPL: usize = 16;
 pub const S: usize = 1632;
-pub const OFF_T0: usize = 0;
-pub const OFF_T1: usize = 32;
-pub const OFF_SEL: usize = 64;
-pub const OFF_EMPL: usize = 96;
-pub const H: usize = OFF_EMPL + N_EMPL * S; // 26 208
+/// Nombre d'étiquettes d'en-tête, donc de visages possibles (QB-3).
+pub const N_ETIQ: usize = 2;
+/// Nombre maximal de visages cachés, en plus du visage principal.
+pub const MAX_CACHES: usize = N_ETIQ - 1;
+/// Les étiquettes T_0 … T_(N_ETIQ−1) occupent les premiers octets de l'en-tête.
+pub const OFF_SEL: usize = 32 * N_ETIQ;
+pub const OFF_EMPL: usize = OFF_SEL + 32;
+pub const H: usize = OFF_EMPL + N_EMPL * S;
 pub const TB: usize = 65_536;
 pub const TC: usize = TB + 16;
 const OFF_KAPPA: usize = 32;
@@ -223,8 +226,11 @@ pub enum ErreurChiffrement {
     AucunDestinataire,
     TropDeDestinataires,
     ClePubliqueInvalide,
-    /// R5 : le visage caché dépasse la réserve.
+    /// R5 : les visages cachés dépassent la réserve. `capacite` est le plus grand
+    /// secret unique que ce leurre peut cacher.
     SecretTropGrand { capacite: u64 },
+    /// Plus de visages cachés que d'étiquettes disponibles.
+    TropDeVisages,
     /// R5 : le même mot de passe pour les deux visages.
     MemeMotDePasse,
     /// R5 : la même clé publique dans les deux visages.
@@ -246,11 +252,13 @@ impl std::fmt::Display for ErreurChiffrement {
             Self::ClePubliqueInvalide => f.write_str("clé publique invalide"),
             Self::SecretTropGrand { capacite } => write!(
                 f,
-                "le visage caché est trop grand : ce leurre ne peut cacher que {capacite} octets \
-                 (la réserve vaut 1/16 du leurre, et au moins 64 Kio). Prends un leurre plus grand"
+                "les visages cachés sont trop grands : ce leurre peut cacher au plus {capacite} octets \
+                 au total (la réserve vaut 1/16 du leurre, et au moins 64 Kio ; chaque visage caché \
+                 supplémentaire coûte en plus 16 octets par bloc de 64 Kio). Prends un leurre plus grand"
             ),
-            Self::MemeMotDePasse => f.write_str("les deux visages ne doivent pas avoir le même mot de passe"),
-            Self::MemeCle => f.write_str("une même clé publique ne doit pas ouvrir les deux visages"),
+            Self::TropDeVisages => write!(f, "{MAX_CACHES} visage(s) caché(s) au plus"),
+            Self::MemeMotDePasse => f.write_str("deux visages ne doivent pas avoir le même mot de passe"),
+            Self::MemeCle => f.write_str("une même clé publique ne doit pas ouvrir deux visages"),
             Self::Io(e) => write!(f, "erreur d'entrée-sortie : {e}"),
         }
     }
@@ -420,15 +428,18 @@ fn verifier_regles(visages: &[Description]) -> Result<(), ErreurChiffrement> {
     if total > N_EMPL {
         return Err(ErreurChiffrement::TropDeDestinataires);
     }
-    if let [a, b] = visages {
-        match (&a.dest, &b.dest) {
-            (Destinataires::MotDePasse(x), Destinataires::MotDePasse(y)) if bool::from(x.ct_eq(y)) => {
-                return Err(ErreurChiffrement::MemeMotDePasse)
+    // R5, pour chaque paire de visages.
+    for (n, a) in visages.iter().enumerate() {
+        for b in &visages[n + 1..] {
+            match (&a.dest, &b.dest) {
+                (Destinataires::MotDePasse(x), Destinataires::MotDePasse(y)) if bool::from(x.ct_eq(y)) => {
+                    return Err(ErreurChiffrement::MemeMotDePasse)
+                }
+                (Destinataires::Cles(x), Destinataires::Cles(y)) if x.iter().any(|k| y.contains(k)) => {
+                    return Err(ErreurChiffrement::MemeCle)
+                }
+                _ => {}
             }
-            (Destinataires::Cles(x), Destinataires::Cles(y)) if x.iter().any(|k| y.contains(k)) => {
-                return Err(ErreurChiffrement::MemeCle)
-            }
-            _ => {}
         }
     }
     Ok(())
@@ -437,7 +448,7 @@ fn verifier_regles(visages: &[Description]) -> Result<(), ErreurChiffrement> {
 /// Clés de fichier K, une par visage, effacées à la destruction.
 type ClesVisages = Vec<Zeroizing<[u8; 32]>>;
 
-/// En-tête complet (T_0 ‖ T_1 ‖ sel ‖ E_0 … E_15) et clé de chaque visage.
+/// En-tête complet (T_0 ‖ … ‖ T_(N_ETIQ−1) ‖ sel ‖ E_0 … E_15) et clé de chaque visage.
 fn construire_entete(f: u64, visages: &[Description]) -> Result<(Vec<u8>, ClesVisages), ErreurChiffrement> {
     verifier_regles(visages)?;
     let mut entete = vec![0u8; H];
@@ -481,66 +492,88 @@ fn construire_entete(f: u64, visages: &[Description]) -> Result<(Vec<u8>, ClesVi
         }
         cles.push(k);
     }
-    // R4 : le visage principal prend T_0 ou T_1 à pile ou face, le caché l'autre.
-    let pile = alea::uniforme_u32(2) as usize;
-    for (n, (v, k)) in visages.iter().zip(&cles).enumerate() {
+    // R4 : chaque visage reçoit une étiquette tirée au hasard parmi les N_ETIQ ;
+    // les étiquettes restantes gardent leur aléa.
+    let mut places: Vec<usize> = (0..N_ETIQ).collect();
+    for i in (1..N_ETIQ).rev() {
+        places.swap(i, alea::uniforme_u32(i as u32 + 1) as usize);
+    }
+    for ((v, k), &x) in visages.iter().zip(&cles).zip(&places) {
         let t = mac_entete(k, f, v.debut, v.longueur, &entete[OFF_SEL..]);
-        let off = [OFF_T0, OFF_T1][(n + pile) % 2];
-        entete[off..off + 32].copy_from_slice(&t);
+        entete[32 * x..32 * x + 32].copy_from_slice(&t);
     }
     Ok((entete, cles))
 }
 
-/// Chiffre un leurre (visage principal) et, éventuellement, un secret (visage
-/// caché), à mémoire bornée. Renvoie la taille F du fichier produit.
+/// Chiffre un leurre (visage principal) et jusqu'à `MAX_CACHES` visages cachés,
+/// à mémoire bornée. Renvoie la taille F du fichier produit.
 pub fn chiffrer_flux<W: Write>(
     principal: Visage,
-    cache: Option<Visage>,
+    caches: Vec<Visage>,
     sortie: &mut W,
 ) -> Result<u64, ErreurChiffrement> {
-    chiffrer_flux_interne(principal, cache, sortie, Falsification::default())
+    chiffrer_flux_interne(principal, caches, sortie, Falsification::default())
 }
 
 #[doc(hidden)]
 pub fn chiffrer_flux_interne<W: Write>(
     principal: Visage,
-    cache: Option<Visage>,
+    caches: Vec<Visage>,
     sortie: &mut W,
     falsif: Falsification,
 ) -> Result<u64, ErreurChiffrement> {
+    if caches.len() > MAX_CACHES {
+        return Err(ErreurChiffrement::TropDeVisages);
+    }
     let l1 = principal.longueur;
     let c1 = taille_chiffree(l1);
-    if let Some(v) = &cache
-        && taille_chiffree(v.longueur) > reserve(l1) {
-            return Err(ErreurChiffrement::SecretTropGrand { capacite: capacite_cachee(l1) });
-        }
+    // R5 : tous les visages cachés ensemble tiennent dans la réserve (§ 5).
+    let tailles: Vec<u64> = caches.iter().map(|v| taille_chiffree(v.longueur)).collect();
+    let total: u64 = tailles.iter().sum();
+    if total > reserve(l1) {
+        return Err(ErreurChiffrement::SecretTropGrand { capacite: capacite_cachee(l1) });
+    }
     let f = tirer_taille(l1);
     let b = f - H as u64;
+
+    // Placement : les visages cachés, dans un ordre aléatoire, séparés par des
+    // intervalles d'aléa dont les bornes sont tirées uniformément dans l'espace
+    // libre (réserve et marge PADMÉ). Rien de cela ne dépend du contenu des secrets.
+    let libre = b - c1 - total;
+    let mut ordre: Vec<usize> = (0..caches.len()).collect();
+    for i in (1..ordre.len()).rev() {
+        ordre.swap(i, alea::uniforme_u32(i as u32 + 1) as usize);
+    }
+    let mut bornes: Vec<u64> = (0..caches.len()).map(|_| alea::uniforme_u64_jusqua(libre)).collect();
+    bornes.sort_unstable();
+    let mut debuts = vec![0u64; caches.len()];
+    let mut deja = 0u64;
+    for (&j, &u) in ordre.iter().zip(&bornes) {
+        debuts[j] = c1 + u + deja;
+        deja += tailles[j];
+    }
 
     let mut descriptions = vec![Description {
         dest: principal.dest,
         debut: falsif.debut.unwrap_or(0),
         longueur: falsif.longueur.unwrap_or(l1),
     }];
-    let mut entree_cachee = None;
-    if let Some(v) = cache {
-        let c2 = taille_chiffree(v.longueur);
-        // Position uniforme dans la réserve et la marge PADMÉ (§ 5).
-        let debut = c1 + alea::uniforme_u64_jusqua(b - c1 - c2);
-        descriptions.push(Description { dest: v.dest, debut, longueur: v.longueur });
-        entree_cachee = Some((v.entree, v.longueur, debut, c2));
+    let mut entrees = Vec::new();
+    for (j, v) in caches.into_iter().enumerate() {
+        descriptions.push(Description { dest: v.dest, debut: debuts[j], longueur: v.longueur });
+        entrees.push((v.entree, v.longueur));
     }
     let (entete, cles) = construire_entete(f, &descriptions)?;
     sortie.write_all(&entete)?;
     ecrire_visage(principal.entree, l1, &cles[0], sortie)?;
-    match entree_cachee {
-        Some((entree, l2, debut, c2)) => {
-            ecrire_alea(sortie, debut - c1)?;
-            ecrire_visage(entree, l2, &cles[1], sortie)?;
-            ecrire_alea(sortie, b - debut - c2)?;
-        }
-        None => ecrire_alea(sortie, b - c1)?,
+    let mut pos = c1;
+    for &j in &ordre {
+        ecrire_alea(sortie, debuts[j] - pos)?;
+        let (entree, l) = &mut entrees[j];
+        ecrire_visage(&mut **entree, *l, &cles[j + 1], sortie)?;
+        pos = debuts[j] + tailles[j];
     }
+    ecrire_alea(sortie, b - pos)?;
     Ok(f)
 }
 
@@ -548,7 +581,7 @@ pub fn chiffrer_flux_interne<W: Write>(
 pub fn chiffrer(clair: &[u8], dest: Destinataires) -> Result<Vec<u8>, ErreurChiffrement> {
     let mut v = Vec::with_capacity(bornes_taille(clair.len() as u64).1 as usize);
     let principal = Visage { entree: &mut &clair[..], longueur: clair.len() as u64, dest };
-    chiffrer_flux(principal, None, &mut v)?;
+    chiffrer_flux(principal, Vec::new(), &mut v)?;
     Ok(v)
 }
 
@@ -562,7 +595,7 @@ pub fn chiffrer_deux_visages(
     let mut v = Vec::with_capacity(bornes_taille(leurre.len() as u64).1 as usize);
     let principal = Visage { entree: &mut &leurre[..], longueur: leurre.len() as u64, dest: dest_leurre };
     let cache = Visage { entree: &mut &secret[..], longueur: secret.len() as u64, dest: dest_secret };
-    chiffrer_flux(principal, Some(cache), &mut v)?;
+    chiffrer_flux(principal, vec![cache], &mut v)?;
     Ok(v)
 }
 
@@ -576,7 +609,7 @@ pub fn chiffrer_falsifie_pour_tests(
 ) -> Result<Vec<u8>, ErreurChiffrement> {
     let mut v = Vec::new();
     let principal = Visage { entree: &mut &clair[..], longueur: clair.len() as u64, dest };
-    chiffrer_flux_interne(principal, None, &mut v, falsif)?;
+    chiffrer_flux_interne(principal, Vec::new(), &mut v, falsif)?;
     Ok(v)
 }
 
@@ -627,7 +660,8 @@ fn retrouver_visages(entete: &[u8], f: u64, ouv: &Ouverture) -> Vec<VisageOuvert
         let longueur = u64::from_be_bytes(c[40..48].try_into().unwrap());
         // L'étiquette est calculée pour CHAQUE essai, déballé ou non.
         let t = mac_entete(&k, f, debut, longueur, &entete[OFF_SEL..]);
-        let valide = deballe & (t.ct_eq(&entete[OFF_T0..OFF_T0 + 32]) | t.ct_eq(&entete[OFF_T1..OFF_T1 + 32]));
+        let une_etiquette = (0..N_ETIQ).fold(Choice::from(0), |acc, x| acc | t.ct_eq(&entete[32 * x..32 * x + 32]));
+        let valide = deballe & une_etiquette;
         // Dédoublonnage sur le triplet (K, début, longueur), pas sur K seul
         // (défaut 1) : deux triplets distincts sont deux visages distincts.
         let deja = visages.iter().fold(Choice::from(0), |acc, v| {
@@ -659,6 +693,17 @@ pub fn dechiffrer_flux<R: Read, W: Write>(
     ouv: Ouverture,
     sortie: &mut W,
 ) -> Result<u64, ErreurOuverture> {
+    dechiffrer_flux_position(entree, taille, ouv, sortie).map(|(longueur, _)| longueur)
+}
+
+/// Comme `dechiffrer_flux`, mais renvoie aussi le début du visage dans le corps :
+/// 0 pour le visage principal (le leurre), plus de 0 pour un visage caché.
+fn dechiffrer_flux_position<R: Read, W: Write>(
+    entree: &mut R,
+    taille: u64,
+    ouv: Ouverture,
+    sortie: &mut W,
+) -> Result<(u64, u64), ErreurOuverture> {
     use ErreurOuverture::Impossible;
     let b = taille.checked_sub(H as u64).ok_or(Impossible)?;
     let mut entete = vec![0u8; H];
@@ -701,16 +746,25 @@ pub fn dechiffrer_flux<R: Read, W: Write>(
     if entree.read(&mut [0u8; 1])? != 0 {
         return Err(Impossible);
     }
-    Ok(v.longueur)
+    Ok((v.longueur, v.debut))
 }
 
 /// Variante en mémoire.
 pub fn dechiffrer(fichier: &[u8], ouv: Ouverture) -> Result<Zeroizing<Vec<u8>>, ImpossibleDeDechiffrer> {
+    dechiffrer_visage(fichier, ouv).map(|(clair, _)| clair).map_err(|_| ImpossibleDeDechiffrer)
+}
+
+/// Variante en mémoire qui dit aussi si le visage ouvert est le visage principal.
+/// Réservée aux outils qui manipulent un fichier dont on possède TOUS les
+/// identifiants (`janus modifier`) : ne jamais l'afficher lors d'une ouverture
+/// ordinaire, qui doit rester muette sur l'existence d'autres visages.
+pub fn dechiffrer_visage(
+    fichier: &[u8],
+    ouv: Ouverture,
+) -> Result<(Zeroizing<Vec<u8>>, bool), ErreurOuverture> {
     let mut v = Zeroizing::new(Vec::with_capacity(fichier.len()));
-    match dechiffrer_flux(&mut &fichier[..], fichier.len() as u64, ouv, &mut *v) {
-        Ok(_) => Ok(v),
-        Err(_) => Err(ImpossibleDeDechiffrer),
-    }
+    let (_, debut) = dechiffrer_flux_position(&mut &fichier[..], fichier.len() as u64, ouv, &mut *v)?;
+    Ok((v, debut == 0))
 }
 
 #[cfg(test)]

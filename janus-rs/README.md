@@ -11,7 +11,7 @@ Toutes se lancent depuis `janus-rs/`.
 | Action | Commande |
 |---|---|
 | Compiler | `cargo build --release` |
-| Lancer les 56 tests | `cargo test --release` |
+| Lancer les 59 tests | `cargo test --release` |
 | Banc d'essai | `cargo run --release --example banc` |
 | Test de temps constant | `cargo run --release --example dudect` |
 | Longue campagne de fuzzing | `JANUS_FUZZ_ITER=100000 cargo test --release --test fuzz -- --nocapture` |
@@ -21,6 +21,8 @@ Toutes se lancent depuis `janus-rs/`.
 | Chiffrer par mot de passe | `target/release/janus chiffrer -m notes.txt notes.janus` |
 | **Deux visages** : un leurre et un secret | `target/release/janus chiffrer -m vacances.zip coffre.janus --cache -m journal.txt` |
 | Ouvrir le visage qui correspond au mot de passe saisi | `target/release/janus dechiffrer -m coffre.janus sortie` |
+| Ouvrir **en mémoire**, sans fichier en clair sur le disque | `target/release/janus dechiffrer -m coffre.janus - \| less` |
+| Rechiffrer en gardant tous les visages, et en changeant le leurre | `target/release/janus modifier -m --leurre vacances2.zip coffre.janus coffre2.janus --cache -m` |
 | Voir ce qu'un tiers apprend d'un fichier | `target/release/janus inspect photo.janus archive.zip lettre.gpg` |
 
 Précisions sur la ligne de commande :
@@ -164,5 +166,5 @@ La v1 écrit 6 % d'octets en plus (la réserve). Même avec la machine ralentie,
  Les pièges d'usage sont décrits au § 10 de ce document : plusieurs versions d'un même fichier, rechiffrement du seul leurre qui efface le secret, traces laissées par le système.
 - Ouvrir le secret oblige à lire tout le leurre qui le précède (le format se lit en flux, sans saut). C'est sans conséquence pour la discrétion : l'adversaire contraint n'ouvre que le leurre, et cette ouverture prend le même temps avec ou sans secret.
 - `ml-kem` et `curve25519-elligator2` effacent leurs secrets à la destruction, mais les copies faites par le système (fichier d'échange, vidage mémoire) ne sont pas maîtrisées.
-- Le chiffrement exige une entrée de longueur connue (un fichier). L'entrée standard n'est pas encore prise en charge.
+- L'entrée standard (`-`) est lue entièrement en mémoire, car Janus doit connaître la longueur du clair avant d'écrire l'en-tête. De même, `dechiffrer … -` garde tout le clair en mémoire jusqu'à la fin de la vérification. Ces deux modes conviennent donc aux fichiers qui tiennent en mémoire.
 - `inspect` reconnaît les formats par leur structure, sans les décoder entièrement : il ne décompresse pas l'en-tête 7z et n'analyse pas le JSON de LUKS2 ni l'en-tête KeePass. Pour age, les tests portent sur des fichiers construits à la main, car age n'est pas installé.

@@ -239,7 +239,7 @@ fn flux_a_deux_visages() {
     let mut sortie = Vec::new();
     let principal = Visage { entree: &mut &leurre[..], longueur: leurre.len() as u64, dest: Destinataires::Cles(&[pk(0)]) };
     let cache = Visage { entree: &mut &secret[..], longueur: secret.len() as u64, dest: Destinataires::MotDePasse(b"s") };
-    let f = format::chiffrer_flux(principal, Some(cache), &mut sortie).unwrap();
+    let f = format::chiffrer_flux(principal, vec![cache], &mut sortie).unwrap();
     assert_eq!(f, sortie.len() as u64);
     for (ouv, attendu) in [
         (Ouverture::Identites(std::slice::from_ref(&identites()[0])), &leurre),
