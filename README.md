@@ -52,9 +52,9 @@ cargo build --release
 
 - **Conformité :** le vecteur de test officiel d'X-Wing (draft-11) est reproduit, et Kemeleon est comparé à une implémentation de référence.
 - **Discrétion :** les fichiers passent le test du χ², alors que les chiffrés ML-KEM bruts sont détectés. L'éphémère X25519 est uniforme, même face à un adversaire capable de calculer des logarithmes discrets.
-- **Déni :** ce que voit l'adversaire contraint suit la même loi avec ou sans secret (test d'homogénéité, p = 0,31).
+- **Déni :** ce que voit l'adversaire contraint suit la même loi avec ou sans secret (test d'homogénéité, p = 0,58 en mélangeant des fichiers à 1 et à 3 visages cachés).
 - **Temps constant :** dudect ne détecte aucune fuite sur Kemeleon, Elligator, la décapsulation ou l'ouverture. Le test lui-même sait repérer une fuite : il la détecte sur un témoin volontairement vulnérable.
-- **Robustesse :** 50 000 mutations de fuzzing ne produisent jamais de panique, ni d'autre clair que l'original.
+- **Robustesse :** 80 000 mutations de fuzzing (50 000, puis 30 000 après QB-3, dont un fichier à quatre visages) ne produisent jamais de panique, ni d'autre clair que l'original.
 
 Les détails et les limites sont dans [janus-rs/README.md](janus-rs/README.md).
 

@@ -20,7 +20,7 @@
 | **P1. Confidentialité hybride** | Le contenu reste secret tant que **X25519 *ou* ML-KEM-768** tient. Pour un mot de passe, tant que celui-ci n'est pas deviné |
 | **P2. Intégrité** | Modifier, ajouter, retirer, tronquer ou réordonner un seul octet fait échouer l'ouverture |
 | **P3. Engagement de clé** | Un fichier ne s'ouvre que sous une seule clé de fichier |
-| **P4. Cohérence entre destinataires** | Tous les destinataires qui ouvrent un fichier obtiennent exactement le même contenu. *En v1 : tous ceux d'un **même visage** ; deux visages peuvent montrer deux contenus ([05-preuve-integrite.md](05-preuve-integrite.md), § 7.1)* |
+| **P4. Cohérence entre destinataires** | Tous les destinataires qui ouvrent un fichier obtiennent exactement le même contenu. *En v1 : tous ceux d'un **même visage** ; des visages différents peuvent montrer des contenus différents ([05-preuve-integrite.md](05-preuve-integrite.md), § 7.1)* |
 | **P5. Indistinguabilité** | Pour qui n'a pas de clé, chaque octet du fichier est indistinguable de l'aléatoire, et sa taille ne dépend que de la longueur du contenu, arrondie (§ 7) |
 | **P6. Destinataires cachés** | Le nombre et l'identité des destinataires ne se voient pas, ni dans les octets, ni dans la taille |
 

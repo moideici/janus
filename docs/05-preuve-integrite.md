@@ -210,7 +210,7 @@ C'est la version « deux visages » des *invisible salamanders* (Dodis, Grubbs, 
 
 **Défaut 1 : dédoublonnage sur `K` seul.**
 - `retrouver_visages` regroupe les candidats par `K`. Un auteur malveillant peut faire déballer, par un même identifiant, `(K, d₁, l₁)` validé par `T_0` et `(K, d₂, l₂)` validé par `T_1`. Le code garde alors le premier en silence, au lieu de signaler « plusieurs visages ».
-- Ce n'est pas une faille : le résultat est déterministe, et le théorème 1 borne tout à deux contenus. Mais le comportement est incohérent.
+- Ce n'est pas une faille : le résultat est déterministe, et le théorème 1 borne tout à un contenu par étiquette (deux à l'époque, quatre depuis QB-3). Mais le comportement est incohérent.
 - *Correctif :* dédoublonner sur le triplet `(K, d, l)`.
 
 **Défaut 2 : temps d'ouverture variable** (§ 6).

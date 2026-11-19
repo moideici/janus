@@ -185,7 +185,7 @@ Une seule erreur, « impossible de déchiffrer » (J-07). Jamais de message du t
 | Tailles impossibles | 16 sur 65 552 | aucune |
 | P2 (intégrité) | chaque octet du fichier | chaque octet **du visage ouvert**, plus la taille totale `F`. Modifier la réserve ne gêne pas le leurre, et c'est voulu |
 | P3 (engagement) | une seule clé par fichier | **au plus quatre** clés (QB-3), une par étiquette (théorème 1 de [05-preuve-integrite.md](05-preuve-integrite.md)) |
-| P4 (cohérence) | tous les destinataires lisent la même chose | tous les destinataires **d'un même visage** lisent la même chose. Deux visages peuvent montrer deux contenus (piège 10.8) |
+| P4 (cohérence) | tous les destinataires lisent la même chose | tous les destinataires **d'un même visage** lisent la même chose. Des visages différents peuvent montrer des contenus différents, quatre au plus (piège 10.8) |
 | Coût d'ouverture par mot de passe | 1 Argon2id | 1 Argon2id + 16 AEAD de 48 octets (négligeable) |
 
 ---
@@ -224,7 +224,7 @@ Hypothèses : ChaCha20-Poly1305 est IND$-CPA, HMAC-SHA-256 est une fonction pseu
 5. **Signature (piste E) incompatible.** Un leurre signé reste possible, mais le secret ne doit pas être signé avec la même clé.
 6. **Traces du système.** Ouvrir le secret écrit son clair sur le disque. Il vaut mieux l'ouvrir dans un dossier lui-même chiffré, ou **en mémoire** : `janus dechiffrer … -` vérifie tout en mémoire et écrit sur la sortie standard, sans créer de fichier en clair.
 7. **La ligne de commande doit rester muette.** Aucune option, aucun message, aucun code de retour ne doit différer selon qu'il existe un visage caché.
-8. **Un même fichier peut montrer deux contenus à deux destinataires.** Un auteur malveillant peut mettre Alice dans un visage et Bob dans l'autre. Comparer l'empreinte du fichier chiffré ne prouve donc pas qu'on a lu la même chose : il faut comparer l'empreinte **du clair**. C'est le prix du déni, et c'est borné à deux contenus ([05-preuve-integrite.md](05-preuve-integrite.md), § 7.1).
+8. **Un même fichier peut montrer des contenus différents à plusieurs destinataires.** Un auteur malveillant peut mettre Alice dans un visage et Bob dans un autre. Comparer l'empreinte du fichier chiffré ne prouve donc pas qu'on a lu la même chose : il faut comparer l'empreinte **du clair**. C'est le prix du déni, et c'est borné à quatre contenus, un par étiquette ([05-preuve-integrite.md](05-preuve-integrite.md), § 7.1).
 9. **Un tiers peut effacer le secret sans que le leurre s'en aperçoive.** Il lui suffit d'écraser la réserve. Garde une copie, et vérifie de temps en temps, avec le second identifiant, que le secret s'ouvre encore ([05-preuve-integrite.md](05-preuve-integrite.md), § 7.2).
 10. **`janus modifier` ne conserve que les visages dont tu donnes l'identifiant.** Avec 4 étiquettes, Janus ne peut pas savoir combien de visages cachés existent : le savoir trahirait le déni. Si tu oublies l'identifiant d'un visage caché, le nouveau fichier ne le contient plus (l'ancien reste intact). Donne toujours **tous** tes identifiants à `modifier`, et garde l'ancien fichier jusqu'à avoir vérifié le nouveau.
 
@@ -258,11 +258,11 @@ Tout ce qui suit `--cache` décrit le visage caché : ses destinataires, puis so
 
 ## 13. Tests prévus
 
-- **Vue contrainte** : sur des paires de fichiers construits avec le même leurre, avec et sans secret, appliquer à tout ce que l'adversaire ne peut pas ouvrir (étiquette inutilisée, emplacements libres, réserve) les tests χ² et, plus tard, NIST STS. Comparer aussi les lois de taille, qui doivent être **identiques**. *Fait (`tests/visages.rs`) : test d'homogénéité du χ² sur 7,5 millions d'octets, p = 0,31, avec un témoin de puissance ; lois de taille identiques. NIST STS reste à faire.*
+- **Vue contrainte** : sur des paires de fichiers construits avec le même leurre, avec et sans secret, appliquer à tout ce que l'adversaire ne peut pas ouvrir (étiquette inutilisée, emplacements libres, réserve) les tests χ² et, plus tard, NIST STS. Comparer aussi les lois de taille, qui doivent être **identiques**. *Fait (`tests/visages.rs`) : test d'homogénéité du χ² sur 7,5 millions d'octets, p = 0,31, avec un témoin de puissance ; lois de taille identiques. Repris après QB-3 en mélangeant des fichiers à 1 et à 3 visages cachés : χ² = 249,6, p = 0,58. NIST STS reste à faire.*
 - **dudect** : ouverture du leurre dans un fichier avec et sans visage caché. *Fait : |t| = 1,34 sur 1 000 mesures.*
 - **Fonctionnels** : chaque identifiant ouvre son visage et seulement le sien, refus R5, frontières de capacité (`c(L₂) = Réserve` accepté, `+1` refusé), leurre vide. *Fait.*
-- **Robustesse** : les mutations dans la réserve ne gênent pas le leurre, mais font échouer le secret ; toute troncature ou tout ajout fait échouer les deux ; reprise du fuzzing par mutations. *Fait : 50 000 mutations (19 novembre 2026, après les correctifs issus des preuves), jamais un autre clair.*
-- **Vecteurs v1**, dont un fichier à deux visages publié avec ses deux mots de passe. *Fait : `janus-rs/vecteurs/deux-visages.janus`.*
+- **Robustesse** : les mutations dans la réserve ne gênent pas le leurre, mais font échouer le secret ; toute troncature ou tout ajout fait échouer les deux ; reprise du fuzzing par mutations. *Fait : 50 000 mutations (19 novembre 2026, après les correctifs issus des preuves), jamais un autre clair. Repris après QB-3 : 30 000 mutations, dont un fichier à quatre visages ; 6 200 acceptées, toutes limitées à la réserve ou aux autres étiquettes.*
+- **Vecteurs v1**, dont un fichier à deux visages publié avec ses deux mots de passe. *Fait : `janus-rs/vecteurs/deux-visages.janus`, et `quatre-visages.janus` depuis QB-3.*
 - **`inspect`** : nouvelle hypothèse « fichier Janus v1 » avec la plage de `L₁`. *Fait, avec la capacité du visage caché possible.*
 
 ---

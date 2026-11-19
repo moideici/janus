@@ -90,7 +90,7 @@ Le témoin prouve que la mesure sait repérer une fuite.
 
 ### Deux visages
 - **Chaque identifiant ouvre son visage, et seulement le sien**, avec toutes les combinaisons : deux mots de passe, deux jeux de clés, mot de passe et clé dans les deux sens.
-- **Vue de l'adversaire contraint** : avec la clé du leurre, tout ce qu'il ne peut pas ouvrir (l'autre étiquette, les emplacements, la réserve) a la même loi avec ou sans secret. Test d'homogénéité du χ² sur 7,5 millions d'octets, avec un secret fait de zéros (le pire cas) : χ² = 265,8, p = 0,31. Le même test détecte un écart de 2 % s'il en existe un.
+- **Vue de l'adversaire contraint** : avec la clé du leurre, tout ce qu'il ne peut pas ouvrir (l'autre étiquette, les emplacements, la réserve) a la même loi avec ou sans secret. Test d'homogénéité du χ² sur 7,5 millions d'octets, avec un secret fait de zéros (le pire cas) : χ² = 265,8, p = 0,31. Le même test détecte un écart de 2 % s'il en existe un. Repris après QB-3 en mélangeant des fichiers à 1 et à 3 visages cachés : χ² = 249,6, p = 0,58.
 - **La taille ne dépend que du leurre** : mêmes bornes, même moyenne, avec ou sans secret.
 - **Règles** : même mot de passe ou même clé pour les deux visages refusés, plus de 16 destinataires au total refusés. Un en-tête piégé où un même mot de passe ouvre une même clé à deux positions est signalé comme « plusieurs visages ». La capacité de la réserve est **exacte** : un secret de la taille maximale passe, un octet de plus est refusé.
 - **Intégrité par visage** : modifier la réserve ne gêne pas le leurre (c'est voulu), mais ferme le secret. Toute troncature ou tout ajout ferme les deux visages, car la taille totale est couverte par les étiquettes.
@@ -101,6 +101,7 @@ Le témoin prouve que la mesure sait repérer une fuite.
 - **Fuzzing par mutations** : 50 000 mutations de 10 types (dont des greffes entre fichiers), sur des fichiers à un et à deux visages, relancées le 19 novembre 2026 après l'éphémère uniforme, le masquage de κ et les correctifs d'intégrité. Durée : 8 min 14 s.
   - Aucune panique, et **jamais un autre clair** que l'original.
   - 11 339 mutations ont été acceptées. Toutes ne touchaient que la réserve ou l'étiquette de l'autre visage, ce que le test vérifie octet par octet.
+  - Repris après QB-3 : 30 000 mutations, dont un fichier à quatre visages (5 min 39 s). Aucune panique, jamais un autre clair ; 6 200 acceptées, toutes limitées à la réserve ou aux étiquettes des autres visages.
 - **Vecteurs de test** : 8 fichiers de référence, dont un à deux visages et un à quatre visages, publiés avec tous leurs mots de passe. Chacun s'ouvre avec les clés indiquées dans le manifeste, et notre chiffrement, avec un aléa déterministe, les reproduit octet pour octet. Tout changement involontaire du format fait échouer les tests.
 - **Fichier de 2 Gio abîmé au milieu** : refusé, sans laisser ni sortie ni fichier temporaire.
 
@@ -161,7 +162,7 @@ La v1 écrit 6 % d'octets en plus (la réserve). Même avec la machine ralentie,
 - **IND-RCCA, pas IND-CCA** : on peut fabriquer une autre version d'un fichier qui donne exactement le même clair, en modifiant la réserve ou l'étiquette de l'autre visage. On ne peut pas en fabriquer une qui donne un clair lié. C'est inévitable avec deux visages (docs/06, § 1).
 - **`dechiffrer_flux` écrit les lots vérifiés au fur et à mesure** : un programme qui l'utilise doit jeter toute la sortie si la fonction échoue. La ligne de commande et `dechiffrer` le font déjà (docs/06, § 5).
 - **Prix du déni** :
-  - un auteur malveillant peut faire lire deux contenus différents à deux destinataires d'**un même fichier** : pour vérifier qu'on a lu la même chose, il faut comparer l'empreinte du clair ;
+  - un auteur malveillant peut faire lire des contenus différents (quatre au plus) à plusieurs destinataires d'**un même fichier** : pour vérifier qu'on a lu la même chose, il faut comparer l'empreinte du clair ;
   - un tiers peut effacer le secret en écrasant la réserve, sans que le leurre le détecte : garde une copie.
  Les pièges d'usage sont décrits au § 10 de ce document : plusieurs versions d'un même fichier, rechiffrement du seul leurre qui efface le secret, traces laissées par le système.
 - Ouvrir le secret oblige à lire tout le leurre qui le précède (le format se lit en flux, sans saut). C'est sans conséquence pour la discrétion : l'adversaire contraint n'ouvre que le leurre, et cette ouverture prend le même temps avec ou sans secret.

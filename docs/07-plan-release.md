@@ -19,7 +19,7 @@ Une release invite d'autres personnes à utiliser l'outil, et à garder des fich
    - une politique de signalement des failles (`SECURITY.md`) ;
    - des binaires produits par l'intégration continue.
 
-Aucune de ces raisons n'est une faiblesse cryptographique connue. Les preuves (documents 04 à 06) et les tests (56, dont 50 000 mutations de fuzzing) sont en place. Ce qui manque relève de la stabilité et de l'outillage.
+Aucune de ces raisons n'est une faiblesse cryptographique connue. Les preuves (documents 04 à 06) et les tests (61, dont 50 000 puis, après QB-3, 30 000 mutations de fuzzing) sont en place. Ce qui manque relève de la stabilité et de l'outillage.
 
 ## Les étapes
 
