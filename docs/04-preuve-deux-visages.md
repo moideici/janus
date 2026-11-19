@@ -39,7 +39,7 @@ On abstrait le format v1 ([03-deux-visages.md](03-deux-visages.md), § 3 à 7). 
 ```
 Chiffrer(M₁, R₁, [M₂, R₂]) :
   F   ←  tirage uniforme dans [Ref(|M₁|), PADMÉ(Ref(|M₁|))]          (§ 5)
-  sel ←$ U₃₂ ;  E_0 … E_15 ←$ U₁₆₃₂ ;  T_0, T_1 ←$ U₃₂ ;  corps ←$ U_{F−H}
+  sel ←$ U₃₂ ;  E_0 … E_15 ←$ U₁₆₃₂ ;  T_0 … T_3 ←$ U₃₂ (QB-3) ;  corps ←$ U_{F−H}
   π   ←$ permutation de {0 … 15} ;  σ ←$ {0, 1}                     (R2, R4)
   d₁ = 0 ;  d₂ ←$ [c(|M₁|), F − H − c(|M₂|)]
   pour chaque visage v présent :
@@ -168,6 +168,17 @@ Restent les éléments communs aux deux mondes, qui suivent la même loi :
 Le leurre est fabriqué exactement de la même manière dans les deux mondes. G₇ est donc **identique** au monde `b = 0`. ∎
 
 ---
+
+
+### Extension à trois visages cachés (QB-3)
+
+Depuis QB-3, un fichier compte 4 étiquettes et jusqu'à `k ≤ 3` visages cachés, placés dans un ordre aléatoire et séparés par de l'aléa, et dont la taille totale ne dépasse pas la réserve. Le jeu DENI se généralise : le monde `b = 1` ajoute `k` visages cachés au lieu d'un, et le monde `b = 0` n'en ajoute aucun.
+
+La preuve est la même : on applique les étapes G₁ à G₇ **à chaque visage caché tour à tour**, ce qui multiplie la borne par `k`. Deux points restent à vérifier, et ils sont vrais :
+- **les étiquettes** sont attribuées par une permutation aléatoire des 4 positions, donc celles des visages cachés et celles qui restent aléatoires ont la même loi ;
+- **le placement** (ordre aléatoire, bornes tirées uniformément dans l'espace libre) ne dépend que des longueurs des secrets, jamais de leur contenu, et tout ce qui n'est pas un flux est de l'aléa.
+
+Une fois les `k` flux rendus aléatoires, le corps hors du leurre est entièrement uniforme, quels que soient `k` et la disposition.
 
 ## 6. Théorème
 

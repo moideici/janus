@@ -22,7 +22,7 @@ use zeroize::Zeroizing;
 pub const N_EMPL: usize = 16;
 pub const S: usize = 1632;
 /// Nombre d'étiquettes d'en-tête, donc de visages possibles (QB-3).
-pub const N_ETIQ: usize = 2;
+pub const N_ETIQ: usize = 4;
 /// Nombre maximal de visages cachés, en plus du visage principal.
 pub const MAX_CACHES: usize = N_ETIQ - 1;
 /// Les étiquettes T_0 … T_(N_ETIQ−1) occupent les premiers octets de l'en-tête.

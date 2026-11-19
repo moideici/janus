@@ -9,7 +9,7 @@
 use janus::alea;
 use janus::format::{
     self, bornes_taille, capacite_cachee, taille_chiffree, Destinataires, ErreurChiffrement, ErreurOuverture,
-    Ouverture, Visage, H, TB,
+    Ouverture, Visage, H, MAX_CACHES, N_ETIQ, TB,
 };
 use janus::inspect::p_chi2_255;
 use janus::xwing::Identite;
@@ -165,9 +165,14 @@ fn chi2_homogeneite(a: &[u64; 256], b: &[u64; 256]) -> f64 {
 /// étiquette, puis le corps après le leurre.
 fn hors_du_leurre(f: &[u8], l1: usize, hist: &mut [u64; 256]) {
     // Son étiquette est celle dont la modification lui ferme le fichier.
-    let mut g = f.to_vec();
-    g[0] ^= 1;
-    let sienne = if ouvrir_par(&g, 0).is_none() { 0..32 } else { 32..64 };
+    let x = (0..N_ETIQ)
+        .find(|&x| {
+            let mut g = f.to_vec();
+            g[32 * x] ^= 1;
+            ouvrir_par(&g, 0).is_none()
+        })
+        .expect("une des étiquettes est celle du leurre");
+    let sienne = 32 * x..32 * x + 32;
     for (p, &x) in f[..H].iter().enumerate() {
         if !sienne.contains(&p) {
             hist[x as usize] += 1;
@@ -184,13 +189,28 @@ fn vue_contrainte_indistinguable() {
     let (mut avec, mut sans) = ([0u64; 256], [0u64; 256]);
     for _ in 0..40 {
         let f_sans = format::chiffrer(&leurre, Destinataires::Cles(&[pk(0)])).unwrap();
-        let f_avec = format::chiffrer_deux_visages(
-            &leurre,
-            Destinataires::Cles(&[pk(0)]),
-            &vec![0u8; capacite_cachee(leurre.len() as u64) as usize], // secret de zéros : le pire cas
-            Destinataires::Cles(&[pk(1)]),
-        )
-        .unwrap();
+        // Une fois sur deux un seul visage caché, une fois sur deux trois (QB-3).
+        // Secrets de zéros : le pire cas.
+        let f_avec = if avec.iter().sum::<u64>() % 2 == 0 {
+            format::chiffrer_deux_visages(
+                &leurre,
+                Destinataires::Cles(&[pk(0)]),
+                &vec![0u8; capacite_cachee(leurre.len() as u64) as usize],
+                Destinataires::Cles(&[pk(1)]),
+            )
+            .unwrap()
+        } else {
+            let zeros = vec![0u8; 20_000];
+            let mut v = Vec::new();
+            let principal = Visage { entree: &mut &leurre[..], longueur: leurre.len() as u64, dest: Destinataires::Cles(&[pk(0)]) };
+            let cles = [[pk(1)], [pk(2)], [pk(3)]];
+            let caches = cles
+                .iter()
+                .map(|c| Visage { entree: Box::leak(Box::new(&zeros[..])), longueur: 20_000, dest: Destinataires::Cles(c) })
+                .collect();
+            format::chiffrer_flux(principal, caches, &mut v).unwrap();
+            v
+        };
         hors_du_leurre(&f_sans, leurre.len(), &mut sans);
         hors_du_leurre(&f_avec, leurre.len(), &mut avec);
     }
@@ -250,4 +270,68 @@ fn flux_a_deux_visages() {
         assert_eq!(n as usize, attendu.len());
         assert_eq!(&clair, attendu);
     }
+}
+
+#[test]
+fn jusqu_a_trois_visages_caches() {
+    assert_eq!((N_ETIQ, MAX_CACHES), (4, 3));
+    let leurre = aleatoire(400_000);
+    let secrets = [aleatoire(20_000), aleatoire(15_000), aleatoire(25_000)];
+    let fabriquer = |dests: [Destinataires; 3]| {
+        let mut v = Vec::new();
+        let principal = Visage { entree: &mut &leurre[..], longueur: leurre.len() as u64, dest: Destinataires::Cles(&[pk(0)]) };
+        let mut lecteurs: Vec<&[u8]> = secrets.iter().map(|s| &s[..]).collect();
+        let caches = lecteurs
+            .iter_mut()
+            .zip(dests)
+            .zip(&secrets)
+            .map(|((l, dest), s)| Visage { entree: l, longueur: s.len() as u64, dest })
+            .collect();
+        format::chiffrer_flux(principal, caches, &mut v).map(|_| v)
+    };
+    // Trois visages cachés, mélangeant mots de passe et clés : chacun s'ouvre sur le sien.
+    let f = fabriquer([
+        Destinataires::MotDePasse(b"un"),
+        Destinataires::Cles(&[pk(1)]),
+        Destinataires::MotDePasse(b"trois"),
+    ])
+    .unwrap();
+    assert_eq!(ouvrir_par(&f, 0).unwrap(), leurre);
+    assert_eq!(ouvrir_mdp(&f, b"un").unwrap(), secrets[0]);
+    assert_eq!(ouvrir_par(&f, 1).unwrap(), secrets[1]);
+    assert_eq!(ouvrir_mdp(&f, b"trois").unwrap(), secrets[2]);
+    assert!(ouvrir_mdp(&f, b"deux").is_none() && ouvrir_par(&f, 2).is_none());
+    // La taille ne dépend toujours que du leurre.
+    let (reference, fmax) = bornes_taille(leurre.len() as u64);
+    assert!((reference..=fmax).contains(&(f.len() as u64)));
+    // R5 entre visages cachés.
+    let r = fabriquer([Destinataires::MotDePasse(b"x"), Destinataires::Cles(&[pk(1)]), Destinataires::MotDePasse(b"x")]);
+    assert!(matches!(r, Err(ErreurChiffrement::MemeMotDePasse)));
+    let r = fabriquer([Destinataires::Cles(&[pk(1)]), Destinataires::Cles(&[pk(2)]), Destinataires::Cles(&[pk(2)])]);
+    assert!(matches!(r, Err(ErreurChiffrement::MemeCle)));
+    // Ensemble, les secrets doivent tenir dans la réserve.
+    let gros = vec![0u8; 30_000];
+    let mut v = Vec::new();
+    let principal = Visage { entree: &mut &leurre[..], longueur: leurre.len() as u64, dest: Destinataires::Cles(&[pk(0)]) };
+    let (mut a, mut b, mut c) = (&gros[..], &gros[..], &gros[..]);
+    let (k1, k2, k3) = ([pk(1)], [pk(2)], [pk(3)]);
+    let caches = vec![
+        Visage { entree: &mut a, longueur: 30_000, dest: Destinataires::Cles(&k1) },
+        Visage { entree: &mut b, longueur: 30_000, dest: Destinataires::Cles(&k2) },
+        Visage { entree: &mut c, longueur: 30_000, dest: Destinataires::Cles(&k3) },
+    ];
+    let r = format::chiffrer_flux(principal, caches, &mut v);
+    assert!(matches!(r, Err(ErreurChiffrement::SecretTropGrand { .. })), "{r:?}");
+    // Un quatrième visage caché : refusé.
+    let mut v = Vec::new();
+    let principal = Visage { entree: &mut &leurre[..], longueur: leurre.len() as u64, dest: Destinataires::Cles(&[pk(0)]) };
+    let petits: Vec<Vec<u8>> = (0..4).map(|_| vec![1u8; 10]).collect();
+    let mut lecteurs: Vec<&[u8]> = petits.iter().map(|p| &p[..]).collect();
+    let mdps: [&[u8]; 4] = [b"a", b"b", b"c", b"d"];
+    let caches = lecteurs
+        .iter_mut()
+        .zip(mdps)
+        .map(|(l, m)| Visage { entree: l, longueur: 10, dest: Destinataires::MotDePasse(m) })
+        .collect();
+    assert!(matches!(format::chiffrer_flux(principal, caches, &mut v), Err(ErreurChiffrement::TropDeVisages)));
 }

@@ -8,10 +8,10 @@ La preuve de déni (document 04) traite un adversaire **passif** : il regarde un
 
 | Propriété | Énoncé prouvé | Hypothèse principale |
 |---|---|---|
-| **P3. Engagement** (§ 3) | Quel que soit son auteur, un fichier s'ouvre sur **au plus deux** clés de fichier, une par étiquette | Résistance aux collisions de SHA-256 |
+| **P3. Engagement** (§ 3) | Quel que soit son auteur, un fichier s'ouvre sur **au plus quatre** clés de fichier (QB-3), une par étiquette | Résistance aux collisions de SHA-256 |
 | **P4. Cohérence** (§ 4) | Deux destinataires qui valident la **même étiquette** lisent exactement le même contenu | P3 |
 | **P2. Intégrité par visage** (§ 5) | Sans l'identifiant d'un visage, on ne peut modifier aucun octet de ce visage sans que l'ouverture échoue. Avec un mot de passe, on ne peut même pas fabriquer un nouveau fichier qui s'ouvre avec lui | HMAC (PRF), ChaCha20-Poly1305 (INT-CTXT), entropie du mot de passe |
-| **Oracle de partition** (§ 6) | Ouvrir un fichier piégé teste au plus 2 mots de passe par tentative | P3 |
+| **Oracle de partition** (§ 6) | Ouvrir un fichier piégé teste au plus 4 mots de passe par tentative (une par étiquette, QB-3) | P3 |
 
 **Ce que la preuve a révélé**, détaillé au § 7 :
 1. **La cohérence n'est plus globale, et c'est le prix du déni.** Un auteur malveillant peut fabriquer *un même fichier* que Alice ouvre sur un contenu et Bob sur un autre. C'est impossible en v0, inévitable en v1, et à documenter pour l'utilisateur.
@@ -26,11 +26,11 @@ La preuve de déni (document 04) traite un adversaire **passif** : il regarde un
 
 ```
 Ouvrir(f, identifiant) :
-  F = |f| ;  lire T_0, T_1, sel, E_0 … E_15
+  F = |f| ;  lire T_0 … T_3, sel, E_0 … E_15
   candidats = { (K, d, l) déballés de w_i, pour i = 0 … 15 } :
      mot de passe : clé_i = HKDF(Argon2id(m, sel), « mdp » ‖ i)
      identité     : clé_i = HKDF(Décaps(sk, r_i, κ_i), « xwing » ‖ i)
-  valides = { c ∈ candidats : HMAC(HKDF(K, « entete »), F ‖ d ‖ l ‖ sel ‖ E) ∈ {T_0, T_1} }
+  valides = { c ∈ candidats : HMAC(HKDF(K, « entete »), F ‖ d ‖ l ‖ sel ‖ E) ∈ {T_0 … T_3} }
   0 valide → ⊥ ;  plus d'un → « plusieurs visages » ;  un seul (K, d, l) :
   vérifier d + c(l) ≤ F − H, puis déchiffrer les n = ⌈l / 64 Kio⌉ blocs STREAM
   (nonce = j, drapeau « dernier » sur le bloc n − 1) à partir de H + d
@@ -66,7 +66,7 @@ Deux faits structurent toute la preuve :
 Pr[ deux triplets distincts acceptés via la même étiquette ] ≤ Adv^CR_SHA-256
 ```
 
-Par conséquent, un fichier s'ouvre sur **au plus deux** triplets, et donc au plus deux contenus.
+Par conséquent, un fichier s'ouvre sur **au plus quatre** triplets (une par étiquette, depuis QB-3), et donc au plus quatre contenus.
 
 **Preuve.** Soient `(K, d, l) ≠ (K', d', l')` acceptés via `T_x`. Alors `HMAC(k, m) = HMAC(k', m') = T_x`, avec `k = HKDF(K, « entete »)` et `m = F ‖ d ‖ l ‖ sel ‖ E`, et de même pour `k'` et `m'`. Il y a trois cas.
 
@@ -155,7 +155,7 @@ Le KEM caché seul n'est donc **pas** IND-CCA. Ce n'est pas grave, car l'étique
 
 **La menace** (Len, Grubbs et Ristenpart, 2021). ChaCha20-Poly1305 n'est pas engageant. Un attaquant peut fabriquer un chiffré qui se déchiffre correctement sous **plusieurs** clés à la fois. S'il te fait ouvrir un fichier piégé et observe le succès ou l'échec, il teste alors plusieurs mots de passe d'un coup. Avec un format mal conçu, cela réduit une recherche exhaustive à une recherche dichotomique.
 
-**Énoncé.** Le **résultat** d'une ouverture (succès ou `⊥`) teste au plus **2** mots de passe par fichier piégé, sauf collision de SHA-256.
+**Énoncé.** Le **résultat** d'une ouverture (succès ou `⊥`) teste au plus **4** mots de passe par fichier piégé (2 avant QB-3), sauf collision de SHA-256.
 
 **Preuve.** Un succès exige un triplet validé par `T_0` ou `T_1`. Pour un mot de passe candidat donné, le triplet déballé est fixé, et la validation dépend de lui. Par le théorème 1, chaque étiquette ne valide qu'un triplet. Au plus deux candidats peuvent donc conduire à un succès. ∎
 
@@ -186,7 +186,7 @@ Si Alice et Bob comparent l'empreinte SHA-256 du fichier, ils la trouvent identi
 - **Le conseil pratique :** pour s'assurer d'avoir lu la même chose, comparer l'empreinte **du clair**, pas celle du fichier chiffré.
 - **Une option possible (piste E) :** si l'expéditeur signe le clair, la signature lie le contenu à son auteur. Elle est alors incompatible avec le second visage, comme prévu.
 
-C'est la version « deux visages » des *invisible salamanders* (Dodis, Grubbs, Ristenpart, Woodage, 2018), mais **bornée à deux contenus** par le théorème 1.
+C'est la version « deux visages » des *invisible salamanders* (Dodis, Grubbs, Ristenpart, Woodage, 2018), mais **bornée à quatre contenus** (deux avant QB-3) par le théorème 1.
 
 ### 7.2 Un tiers peut effacer le visage caché sans que le leurre s'en aperçoive
 

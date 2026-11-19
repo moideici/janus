@@ -8,7 +8,9 @@ use std::process::{Command, Output, Stdio};
 
 fn janus() -> Command {
     let mut c = Command::new(env!("CARGO_BIN_EXE_janus"));
-    c.env_remove("JANUS_MDP").env_remove("JANUS_MDP_CACHE");
+    for v in ["JANUS_MDP", "JANUS_MDP_CACHE", "JANUS_MDP_CACHE2", "JANUS_MDP_CACHE3"] {
+        c.env_remove(v);
+    }
     c
 }
 
@@ -129,4 +131,53 @@ fn version_et_aide() {
     assert!(o.status.success() && String::from_utf8_lossy(&o.stdout).contains(env!("CARGO_PKG_VERSION")));
     let o = lancer(janus().arg("--help"), None);
     assert!(o.status.success() && String::from_utf8_lossy(&o.stdout).contains("modifier"));
+}
+
+/// QB-3 : trois --cache dans une seule commande, et modifier sur quatre visages.
+#[test]
+fn quatre_visages_en_ligne_de_commande() {
+    let d = dossier("quatre");
+    let leurre = d.join("leurre.bin");
+    std::fs::write(&leurre, vec![5u8; 500_000]).unwrap();
+    let secrets: Vec<PathBuf> = (0..3).map(|j| d.join(format!("s{j}.txt"))).collect();
+    for (j, s) in secrets.iter().enumerate() {
+        std::fs::write(s, format!("secret numéro {j}")).unwrap();
+    }
+    let mdp = |c: &mut Command| {
+        c.env("JANUS_MDP", "zero").env("JANUS_MDP_CACHE", "un").env("JANUS_MDP_CACHE2", "deux").env("JANUS_MDP_CACHE3", "trois");
+    };
+    let (v1, v2) = (d.join("v1.janus"), d.join("v2.janus"));
+    let mut c = janus();
+    c.args(["chiffrer", "-m"]).arg(&leurre).arg(&v1);
+    for s in &secrets {
+        c.args(["--cache", "-m"]).arg(s);
+    }
+    mdp(&mut c);
+    let o = lancer(&mut c, None);
+    assert!(o.status.success(), "{}", stderr(&o));
+    let ouvrir = |f: &PathBuf, m: &str| lancer(janus().args(["dechiffrer", "-m"]).arg(f).arg("-").env("JANUS_MDP", m), None).stdout;
+    assert_eq!(ouvrir(&v1, "zero"), vec![5u8; 500_000]);
+    for (j, m) in ["un", "deux", "trois"].iter().enumerate() {
+        assert_eq!(ouvrir(&v1, m), format!("secret numéro {j}").into_bytes());
+    }
+    // Un quatrième --cache est refusé.
+    let mut c = janus();
+    c.args(["chiffrer", "-m"]).arg(&leurre).arg(d.join("trop.janus"));
+    for s in secrets.iter().chain(std::iter::once(&secrets[0])) {
+        c.args(["--cache", "-m"]).arg(s);
+    }
+    mdp(&mut c);
+    assert!(!lancer(&mut c, None).status.success());
+    // Piège de QB-3 : modifier ne PEUT PAS savoir combien de visages cachés existent
+    // (ce serait trahir le déni). Avec deux identifiants cachés sur trois, il réussit,
+    // prévient que seuls les visages donnés sont conservés, et le troisième est perdu.
+    let mut c = janus();
+    c.args(["modifier", "-m"]).arg(&v1).arg(&v2).args(["--cache", "-m", "--cache", "-m"]);
+    mdp(&mut c);
+    let o = lancer(&mut c, None);
+    assert!(o.status.success(), "{}", stderr(&o));
+    assert!(stderr(&o).contains("seuls les 3 visages donnés"), "{}", stderr(&o));
+    assert_eq!(ouvrir(&v2, "deux"), "secret numéro 1".as_bytes());
+    assert!(ouvrir(&v2, "trois").is_empty(), "le visage non fourni à modifier est perdu");
+    let _ = std::fs::remove_dir_all(&d);
 }

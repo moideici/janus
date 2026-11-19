@@ -78,7 +78,7 @@ Comme dans le document 04, **un seul** des deux chemins C1 et C2 sert à la fois
 
 ```
 Adv^RCCA(𝒜) ≤ n · min( Adv^IND-CCA_ML-KEM + Adv^MLWE + ε_K , Adv^gapDH )     (G₁, clé publique)
-            + (q_A + 2·q_O) / 2^h                                             (G₁, mot de passe)
+            + (q_A + 4·q_O) / 2^h                                             (G₁, mot de passe)
             + n · ε_E                                                         (G₂)
             + n · (Adv^IND$_AEAD + q_O · Adv^INT-CTXT_AEAD)                   (G₃)
             + q_O · (Adv^MAC_HMAC + Adv^INT-CTXT_STREAM) + Adv^CR_SHA-256      (G₄)
@@ -86,7 +86,7 @@ Adv^RCCA(𝒜) ≤ n · min( Adv^IND-CCA_ML-KEM + Adv^MLWE + ε_K , Adv^gapDH ) 
             + O(q_H · (q_O + n) / 2²⁵⁶)
 ```
 
-Tous les termes sont négligeables, sauf pour un visage à mot de passe. Celui-ci vaut ce que vaut le mot de passe : `q_A` essais hors ligne, plus **au plus 2 essais par ouverture** que tu acceptes de faire (théorème 4 du document 05).
+Tous les termes sont négligeables, sauf pour un visage à mot de passe. Celui-ci vaut ce que vaut le mot de passe : `q_A` essais hors ligne, plus **au plus 4 essais par ouverture** que tu acceptes de faire (théorème 4 du document 05).
 
 ### 4.1 La séquence de jeux
 
@@ -119,7 +119,7 @@ Deux chemins, dont un seul suffit, comme au document 04 :
 
 - **Visage défi à mot de passe.**
   - `A* = Argon2id(m, sel*)` devient `U₃₂`. Cela n'est visible que si `𝒜` interroge Argon2id sur `(m, sel*)`, avec une probabilité d'au plus `q_A / 2^h`.
-  - L'oracle d'ouverture, lui, calcule `Argon2id(m, sel')` pour les `sel'` des fichiers soumis. Le résultat d'une ouverture dépend du mot de passe pour **au plus 2** candidats (théorème 4 du document 05), d'où le terme `2·q_O / 2^h`.
+  - L'oracle d'ouverture, lui, calcule `Argon2id(m, sel')` pour les `sel'` des fichiers soumis. Le résultat d'une ouverture dépend du mot de passe pour **au plus 4** candidats, un par étiquette (théorème 4 du document 05), d'où le terme `4·q_O / 2^h`.
 
 **G₂. Le représentant `r*` devient aléatoire** : statistique (H6), comme au document 04.
 
@@ -170,7 +170,7 @@ Deux chemins, dont un seul suffit, comme au document 04 :
 ## 6. Ce que la preuve a révélé, et une option
 
 **Constats.**
-1. **La notion exacte est RCCA, et non CCA.** C'est inévitable avec deux étiquettes (§ 1). Ce n'était écrit nulle part : le document 05 annonçait seulement le recollement IND-CCA.
+1. **La notion exacte est RCCA, et non CCA.** C'est inévitable dès qu'il y a plusieurs étiquettes (§ 1), et a fortiori avec les 4 de QB-3. Ce n'était écrit nulle part : le document 05 annonçait seulement le recollement IND-CCA.
 2. **Le masquage de `κ` est compatible avec IND-CCA**, ce qui n'allait pas de soi : sa clé ne dépend que de `ct_X` (§ 4.1, chemin X25519). Il faut le conserver ainsi. Faire dépendre le masque d'autre chose, par exemple de `κ` lui-même, casserait la simulation.
 3. **La condition d'usage sur la sortie en flux** (§ 5).
 4. **Aucun défaut d'implémentation nouveau.** Les erreurs liées au contenu donnent toutes la même réponse, « impossible de déchiffrer ». Seules les vraies erreurs d'entrée-sortie (disque plein, par exemple) diffèrent, et un attaquant distant ne les contrôle pas.

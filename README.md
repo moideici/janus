@@ -16,7 +16,7 @@
 | L'outil se reconnaît au premier octet | oui | oui | **non : tout le fichier ressemble à de l'aléa** |
 | Le nombre de destinataires se voit | oui, avec leurs identifiants | oui | **non** (16 emplacements toujours présents) |
 | La taille du clair se lit | à quelques octets près | exactement | **à quelques pour cent près** (bourrage PADMÉ aléatoire, et réserve) |
-| Un même fichier s'ouvre sur deux contenus | non | non | **oui : un leurre et un secret** |
+| Un même fichier s'ouvre sur plusieurs contenus | non | non | **oui : un leurre et jusqu'à 3 secrets** |
 | Engagement de clé | non | oui | **oui** |
 
 **Les deux visages.** Un fichier s'ouvre sur un leurre avec un premier mot de passe, et sur le vrai contenu avec un second. Si quelqu'un te force à donner ton mot de passe, tu donnes celui du leurre. Il ne peut pas **prouver** qu'un second visage existe, parce que **tous** les fichiers Janus ont la même forme, qu'ils en contiennent un ou non.
@@ -33,7 +33,7 @@ cargo build --release
 
 | Dossier | Contenu |
 |---|---|
-| [`janus-rs/`](janus-rs/README.md) | Le prototype en Rust : bibliothèque, ligne de commande `janus`, 56 tests, vecteurs de test, banc d'essai, test de temps constant (dudect) |
+| [`janus-rs/`](janus-rs/README.md) | Le prototype en Rust : bibliothèque, ligne de commande `janus`, 61 tests, vecteurs de test, banc d'essai, test de temps constant (dudect) |
 | [`docs/`](docs/) | La conception et les preuves, de la cartographie au plan de release (voir ci-dessous) |
 
 ### Documents
@@ -42,7 +42,7 @@ cargo build --release
 |---|---|---|
 | 01 | [Cartographie](docs/01-cartographie.md) | Menaces, exigences J-01 à J-11, failles connues ailleurs, pistes d'innovation, décisions |
 | 02 | [Spécification v0](docs/02-spec-v0.md) | Le format de base : X-Wing caché, Kemeleon, Elligator 2, STREAM, PADMÉ |
-| 03 | [Deux visages](docs/03-deux-visages.md) | Le format v1 : réserve, deux étiquettes, pièges d'usage |
+| 03 | [Deux visages](docs/03-deux-visages.md) | Le format v1 : réserve, 4 étiquettes (un leurre et jusqu'à 3 visages cachés), pièges d'usage |
 | 04 | [Preuve de déni](docs/04-preuve-deux-visages.md) | Séquence de jeux. La preuve a révélé, puis fait corriger, une faiblesse quantique |
 | 05 | [Preuve d'intégrité](docs/05-preuve-integrite.md) | Engagement, cohérence par visage, absence d'oracle de partition |
 | 06 | [Preuve de confidentialité active](docs/06-preuve-confidentialite-active.md) | IND-RCCA, et pourquoi IND-CCA strict est impossible avec deux visages |

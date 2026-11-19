@@ -11,7 +11,7 @@ Toutes se lancent depuis `janus-rs/`.
 | Action | Commande |
 |---|---|
 | Compiler | `cargo build --release` |
-| Lancer les 59 tests | `cargo test --release` |
+| Lancer les 61 tests | `cargo test --release` |
 | Banc d'essai | `cargo run --release --example banc` |
 | Test de temps constant | `cargo run --release --example dudect` |
 | Longue campagne de fuzzing | `JANUS_FUZZ_ITER=100000 cargo test --release --test fuzz -- --nocapture` |
@@ -37,7 +37,7 @@ Précisions sur la ligne de commande :
 
 | Fichier | Rôle | Spec |
 |---|---|---|
-| `src/format.rs` | Format v1 : deux étiquettes, sel commun, emplacements, réserve, deux visages STREAM par lots parallèles, ouverture en flux | 03-deux-visages § 3 à 7 |
+| `src/format.rs` | Format v1 : 4 étiquettes, sel commun, emplacements, réserve, un leurre et jusqu'à 3 visages cachés en STREAM par lots parallèles, ouverture en flux | 03-deux-visages § 3 à 7 |
 | `src/xwing.rs` | X-Wing draft-11 et encapsulation cachée (point sale uniforme, Elligator 2, Kemeleon, masquage de κ) | § 3.1, 6 |
 | `src/kemeleon.rs` | Kemeleon draft-02, **en temps constant** | § 6 |
 | `src/elligator.rs` | Inverse d'Elligator 2 pour un point quelconque, en temps constant (`fiat-crypto`) : permet un scalaire éphémère uniforme, non clampé | § 6, 04-preuve § 7.1 |
@@ -45,7 +45,7 @@ Précisions sur la ligne de commande :
 | `src/inspect.rs` | `janus inspect` : radiographie défensive (age, gpg, ZIP, 7-Zip, LUKS, KeePass, openssl, Janus) | § 7, piste H |
 | `src/alea.rs` | Aléa du système uniquement ; flux déterministe réservé aux tests | § 2 |
 | `src/vecteurs.rs` | Génération et vérification des vecteurs de test | § 13.1 |
-| `vecteurs/` | 7 fichiers `.janus` de référence, dont un à deux visages, et `manifeste.json` | § 13.1 |
+| `vecteurs/` | 8 fichiers `.janus` de référence, dont un à deux et un à quatre visages, et `manifeste.json` | § 13.1 |
 | `tests/format.rs` | Allers-retours, fichiers piégés, statistiques, flux | § 13.2 |
 | `tests/visages.rs` | Deux visages : ouverture, règles R3 et R5, capacité, taille, vue de l'adversaire contraint | 03-deux-visages § 13 |
 | `tests/fuzz.rs` | Fuzzing par mutations, sur des fichiers à un et à deux visages | § 13.3 |
@@ -101,7 +101,7 @@ Le témoin prouve que la mesure sait repérer une fuite.
 - **Fuzzing par mutations** : 50 000 mutations de 10 types (dont des greffes entre fichiers), sur des fichiers à un et à deux visages, relancées le 19 novembre 2026 après l'éphémère uniforme, le masquage de κ et les correctifs d'intégrité. Durée : 8 min 14 s.
   - Aucune panique, et **jamais un autre clair** que l'original.
   - 11 339 mutations ont été acceptées. Toutes ne touchaient que la réserve ou l'étiquette de l'autre visage, ce que le test vérifie octet par octet.
-- **Vecteurs de test** : 7 fichiers de référence, dont un à deux visages publié avec ses deux mots de passe. Chacun s'ouvre avec les clés indiquées dans le manifeste, et notre chiffrement, avec un aléa déterministe, les reproduit octet pour octet. Tout changement involontaire du format fait échouer les tests.
+- **Vecteurs de test** : 8 fichiers de référence, dont un à deux visages et un à quatre visages, publiés avec tous leurs mots de passe. Chacun s'ouvre avec les clés indiquées dans le manifeste, et notre chiffrement, avec un aléa déterministe, les reproduit octet pour octet. Tout changement involontaire du format fait échouer les tests.
 - **Fichier de 2 Gio abîmé au milieu** : refusé, sans laisser ni sortie ni fichier temporaire.
 
 ## `janus inspect` : ce qu'un tiers voit

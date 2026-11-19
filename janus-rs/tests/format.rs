@@ -1,7 +1,9 @@
 //! Tests du format Janus (v1, un seul visage) : allers-retours, corpus de fichiers
 //! piégés et propriétés. Les deux visages ont leurs tests dans tests/visages.rs.
 
-use janus::format::{self, Destinataires, Falsification, ImpossibleDeDechiffrer, Ouverture, Visage, H, OFF_EMPL, S, TB, TC};
+use janus::format::{
+    self, Destinataires, Falsification, ImpossibleDeDechiffrer, Ouverture, Visage, H, N_ETIQ, OFF_EMPL, OFF_SEL, S, TB, TC,
+};
 use janus::xwing::Identite;
 use std::sync::OnceLock;
 
@@ -115,7 +117,7 @@ fn un_bit_inverse_partout() {
     let f = pour_alice(&clair);
     let fin_visage = H + format::taille_chiffree(clair.len() as u64) as usize;
     // Sel, début/milieu/fin de chaque emplacement, chaque bloc du visage et son dernier octet.
-    let mut positions = vec![64, 95];
+    let mut positions = vec![OFF_SEL, OFF_SEL + 31];
     for i in 0..16 {
         positions.extend([OFF_EMPL + i * S, OFF_EMPL + i * S + 700, OFF_EMPL + i * S + S - 1]);
     }
@@ -128,11 +130,12 @@ fn un_bit_inverse_partout() {
         g[p] ^= 0x01;
         refuse(&g, &format!("bit inversé à l'octet {p}"));
     }
-    // Les deux étiquettes à la fois : l'une des deux est celle d'Alice.
+    // Toutes les étiquettes à la fois : l'une d'elles est celle d'Alice.
     let mut g = f.clone();
-    g[0] ^= 1;
-    g[32] ^= 1;
-    refuse(&g, "étiquettes T_0 et T_1");
+    for x in 0..N_ETIQ {
+        g[32 * x] ^= 1;
+    }
+    refuse(&g, "toutes les étiquettes");
     // La réserve n'appartient pas au visage : la modifier ne le gêne pas (c'est voulu, § 8).
     let mut g = f.clone();
     let dernier = g.len() - 1;

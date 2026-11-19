@@ -20,14 +20,13 @@ use std::fmt::Write as _;
 use std::path::PathBuf;
 
 const MDP: &str = "janus";
-const MDP_CACHE: &str = "visage";
-const LONGUEUR_SECRET: usize = 700;
 
 enum Dest {
     MotDePasse,
     Cles(u8), // nombre de destinataires ; graine du destinataire i = [i + 1; 32]
-    /// Leurre ouvert par MDP, secret de LONGUEUR_SECRET octets ouvert par MDP_CACHE.
-    DeuxVisages,
+    /// Leurre ouvert par MDP, puis des visages cachés : (mot de passe, longueur).
+    /// Le j-ième secret vaut octet k = (17·k + 3 + 50·j) mod 256.
+    Visages(&'static [(&'static str, usize)]),
 }
 
 struct Cas {
@@ -43,7 +42,12 @@ const CAS: &[Cas] = &[
     Cas { nom: "vide", dest: Dest::Cles(1), longueur: 0 },
     Cas { nom: "un-bloc-exact", dest: Dest::Cles(1), longueur: 65_536 },
     Cas { nom: "deux-blocs", dest: Dest::Cles(1), longueur: 65_537 },
-    Cas { nom: "deux-visages", dest: Dest::DeuxVisages, longueur: 1000 },
+    Cas { nom: "deux-visages", dest: Dest::Visages(&[("visage", 700)]), longueur: 1000 },
+    Cas {
+        nom: "quatre-visages",
+        dest: Dest::Visages(&[("visage", 700), ("deuxieme", 300), ("troisieme", 200)]),
+        longueur: 1000,
+    },
 ];
 
 /// Clair de longueur n : octet k = (31·k + 7) mod 256.
@@ -51,9 +55,9 @@ fn clair(n: usize) -> Vec<u8> {
     (0..n).map(|k| (31 * k + 7) as u8).collect()
 }
 
-/// Clair du visage caché : octet k = (17·k + 3) mod 256.
-fn clair_secret(n: usize) -> Vec<u8> {
-    (0..n).map(|k| (17 * k + 3) as u8).collect()
+/// Clair du j-ième visage caché : octet k = (17·k + 3 + 50·j) mod 256.
+fn clair_secret(j: usize, n: usize) -> Vec<u8> {
+    (0..n).map(|k| (17 * k + 3 + 50 * j) as u8).collect()
 }
 
 fn graine(i: u8) -> [u8; 32] {
@@ -72,13 +76,27 @@ fn generer(cas: &Cas) -> Vec<u8> {
     let m = clair(cas.longueur);
     avec_graine(cas.nom.as_bytes(), || match cas.dest {
         Dest::MotDePasse => format::chiffrer(&m, Destinataires::MotDePasse(MDP.as_bytes())).unwrap(),
-        Dest::DeuxVisages => format::chiffrer_deux_visages(
-            &m,
-            Destinataires::MotDePasse(MDP.as_bytes()),
-            &clair_secret(LONGUEUR_SECRET),
-            Destinataires::MotDePasse(MDP_CACHE.as_bytes()),
-        )
-        .unwrap(),
+        Dest::Visages(caches) => {
+            let secrets: Vec<Vec<u8>> = caches.iter().enumerate().map(|(j, &(_, n))| clair_secret(j, n)).collect();
+            let mut lecteurs: Vec<&[u8]> = secrets.iter().map(|s| &s[..]).collect();
+            let visages = lecteurs
+                .iter_mut()
+                .zip(caches.iter())
+                .map(|(l, &(mdp, n))| format::Visage {
+                    entree: l,
+                    longueur: n as u64,
+                    dest: Destinataires::MotDePasse(mdp.as_bytes()),
+                })
+                .collect();
+            let principal = format::Visage {
+                entree: &mut &m[..],
+                longueur: m.len() as u64,
+                dest: Destinataires::MotDePasse(MDP.as_bytes()),
+            };
+            let mut v = Vec::new();
+            format::chiffrer_flux(principal, visages, &mut v).unwrap();
+            v
+        }
         Dest::Cles(n) => {
             let pks: Vec<_> = (0..n).map(|i| *Identite::depuis_graine(&graine(i)).cle_publique()).collect();
             format::chiffrer(&m, Destinataires::Cles(&pks)).unwrap()
@@ -88,7 +106,7 @@ fn generer(cas: &Cas) -> Vec<u8> {
 
 fn manifeste(fichiers: &[(&Cas, Vec<u8>)]) -> String {
     let mut s = String::from(
-        "{\n  \"format\": \"Janus v1 à deux visages (docs/03-deux-visages.md, sur la base de docs/02-spec-v0.md)\",\n  \
+        "{\n  \"format\": \"Janus v1, 4 étiquettes : un leurre et jusqu'à 3 visages cachés (docs/03-deux-visages.md, sur la base de docs/02-spec-v0.md)\",\n  \
          \"clair\": \"octet k = (31*k + 7) mod 256, sur clair_longueur octets\",\n  \
          \"graines\": \"identité X-Wing du destinataire i (à partir de 0) : 32 octets valant i+1\",\n  \
          \"vecteurs\": [\n",
@@ -96,12 +114,23 @@ fn manifeste(fichiers: &[(&Cas, Vec<u8>)]) -> String {
     for (n, (cas, f)) in fichiers.iter().enumerate() {
         let ouverture = match cas.dest {
             Dest::MotDePasse => format!("{{ \"type\": \"mot_de_passe\", \"valeur\": \"{MDP}\" }}"),
-            Dest::DeuxVisages => format!(
-                "{{ \"type\": \"mot_de_passe\", \"valeur\": \"{MDP}\", \"visage_cache\": {{ \
-                 \"mot_de_passe\": \"{MDP_CACHE}\", \"clair\": \"octet k = (17*k + 3) mod 256\", \
-                 \"clair_longueur\": {LONGUEUR_SECRET}, \"sha256_clair\": \"{}\" }} }}",
-                hex_sha256(&clair_secret(LONGUEUR_SECRET))
-            ),
+            Dest::Visages(caches) => {
+                let v: Vec<String> = caches
+                    .iter()
+                    .enumerate()
+                    .map(|(j, &(mdp, n))| {
+                        format!(
+                            "{{ \"mot_de_passe\": \"{mdp}\", \"clair\": \"octet k = (17*k + 3 + 50*{j}) mod 256\", \
+                             \"clair_longueur\": {n}, \"sha256_clair\": \"{}\" }}",
+                            hex_sha256(&clair_secret(j, n))
+                        )
+                    })
+                    .collect();
+                format!(
+                    "{{ \"type\": \"mot_de_passe\", \"valeur\": \"{MDP}\", \"visages_caches\": [{}] }}",
+                    v.join(", ")
+                )
+            }
             Dest::Cles(k) => {
                 let g: Vec<String> = (0..k).map(|i| format!("\"{}\"", hex::encode(graine(i)))).collect();
                 format!("{{ \"type\": \"identites\", \"chacune_ouvre\": [{}] }}", g.join(", "))
@@ -154,11 +183,13 @@ fn vecteurs_reproductibles_et_ouvrables() {
                 let c = format::dechiffrer(&publie, Ouverture::MotDePasse(MDP.as_bytes())).unwrap();
                 assert_eq!(&*c, &attendu[..]);
             }
-            Dest::DeuxVisages => {
+            Dest::Visages(caches) => {
                 let c = format::dechiffrer(&publie, Ouverture::MotDePasse(MDP.as_bytes())).unwrap();
                 assert_eq!(&*c, &attendu[..], "leurre");
-                let c = format::dechiffrer(&publie, Ouverture::MotDePasse(MDP_CACHE.as_bytes())).unwrap();
-                assert_eq!(&*c, &clair_secret(LONGUEUR_SECRET)[..], "visage caché");
+                for (j, &(mdp, n)) in caches.iter().enumerate() {
+                    let c = format::dechiffrer(&publie, Ouverture::MotDePasse(mdp.as_bytes())).unwrap();
+                    assert_eq!(&*c, &clair_secret(j, n)[..], "{} : visage caché {j}", cas.nom);
+                }
             }
             Dest::Cles(n) => {
                 for i in 0..n {

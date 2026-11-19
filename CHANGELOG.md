@@ -10,6 +10,11 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), et les 
 - La bibliothèque accepte une **liste** de visages cachés (`chiffrer_flux`), et `dechiffrer_visage` indique si le visage ouvert est le leurre.
 - Tests de la ligne de commande (`tests/cli.rs`).
 
+### Modifié (format : les fichiers de la v0.1.0-alpha ne s'ouvrent plus)
+- **QB-3 : 4 étiquettes d'en-tête au lieu de 2.** Un fichier contient un leurre et jusqu'à **3 visages cachés**, qui se partagent la réserve. Avoir livré deux identifiants ne prouve plus qu'on a tout livré. L'en-tête passe de 26 208 à 26 272 octets. Les vecteurs de test sont régénérés, avec un nouveau fichier `quatre-visages.janus`.
+- `chiffrer` accepte jusqu'à trois `--cache`, et `modifier` autant d'identifiants cachés.
+- Engagement : au plus 4 clés par fichier ; oracle de partition : au plus 4 mots de passe testés par ouverture (documents 05 et 06).
+
 ## [0.1.0-alpha] — 2026-11-19
 
 Premier aperçu public. Format **Janus v1**, non figé.

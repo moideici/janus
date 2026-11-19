@@ -29,7 +29,7 @@ ne peut pas distinguer un fichier **avec** visage caché d'un fichier **sans** v
 
 ## 2. Trois règles de conception
 
-1. **Une seule structure.** Le second visage n'est pas une option ajoutée au format : c'est **le** format. Chaque fichier contient deux étiquettes d'en-tête et une **réserve** d'octets aléatoires. Dans un fichier à un visage, l'étiquette et la réserve inutilisées sont de l'aléa. Dans un fichier à deux visages, elles portent le visage caché.
+1. **Une seule structure.** Le second visage n'est pas une option ajoutée au format : c'est **le** format. *Depuis QB-3, chaque fichier contient quatre étiquettes, et jusqu'à trois visages cachés peuvent partager la réserve.* Chaque fichier contient deux étiquettes d'en-tête et une **réserve** d'octets aléatoires. Dans un fichier à un visage, l'étiquette et la réserve inutilisées sont de l'aléa. Dans un fichier à deux visages, elles portent le visage caché.
 2. **Chaque visage est un chiffré complet et engagé.** Chaque visage a sa propre clé de fichier `K`, sa propre étiquette d'en-tête et son propre flux STREAM. On n'exploite **pas** l'absence d'engagement de clé (J-05) : ouvrir un visage n'apprend rien sur l'autre, et chacun reste intègre.
 3. **La taille ne dépend que du leurre.** La taille de la réserve est une **fonction fixe** de la longueur du leurre, connue de tous (§ 5). L'adversaire qui a ouvert le leurre peut la recalculer, et il trouve exactement ce que la spécification annonce.
 
@@ -49,9 +49,12 @@ Le format v0 n'est ni figé ni diffusé. On propose donc que cette structure **r
  64         32               sel      sel Argon2id, commun aux deux visages
  96         16 × 1632        E_0 … E_15   emplacements de destinataire
  26 208     F − 26 208       corps    visage principal, réserve, visage caché
+
+ *Depuis QB-3 (4 étiquettes) : T_0 … T_3 occupent 128 octets, puis sel (32),
+  puis E_0 … E_15 à partir de l'octet 160 ; le corps commence à 26 272.*
 ```
 
-`H` = 96 + 16 × 1632 = **26 208** octets (contre 25 888 en v0).
+`H` = 96 + 16 × 1632 = **26 208** octets (contre 25 888 en v0). **Avec QB-3 : `H` = 160 + 16 × 1632 = 26 272 octets.**
 
 ### 3.1 Emplacement (1632 octets)
 
@@ -181,7 +184,7 @@ Une seule erreur, « impossible de déchiffrer » (J-07). Jamais de message du t
 | Taille | `[Ref, PADMÉ(Ref)]` | idem, avec en plus une réserve fixe dans `Ref` |
 | Tailles impossibles | 16 sur 65 552 | aucune |
 | P2 (intégrité) | chaque octet du fichier | chaque octet **du visage ouvert**, plus la taille totale `F`. Modifier la réserve ne gêne pas le leurre, et c'est voulu |
-| P3 (engagement) | une seule clé par fichier | **au plus deux** clés, une par étiquette (théorème 1 de [05-preuve-integrite.md](05-preuve-integrite.md)) |
+| P3 (engagement) | une seule clé par fichier | **au plus quatre** clés (QB-3), une par étiquette (théorème 1 de [05-preuve-integrite.md](05-preuve-integrite.md)) |
 | P4 (cohérence) | tous les destinataires lisent la même chose | tous les destinataires **d'un même visage** lisent la même chose. Deux visages peuvent montrer deux contenus (piège 10.8) |
 | Coût d'ouverture par mot de passe | 1 Argon2id | 1 Argon2id + 16 AEAD de 48 octets (négligeable) |
 
@@ -217,12 +220,13 @@ Hypothèses : ChaCha20-Poly1305 est IND$-CPA, HMAC-SHA-256 est une fonction pseu
 1. **Plusieurs versions du même fichier.** Si l'adversaire voit deux versions d'un fichier dont le leurre n'a **pas changé** mais dont tous les octets ont changé, il peut se demander pourquoi l'auteur a rechiffré un leurre identique. C'est le talon d'Achille connu des volumes cachés de VeraCrypt (adversaire à plusieurs instantanés). Conseil : modifier le leurre chaque fois qu'on modifie le secret. *Outil : `janus modifier` avertit quand le leurre n'a pas changé.*
 2. **Pas de modification en place.** Rechiffrer le leurre avec le seul mot de passe du leurre produit un fichier **sans** visage caché : le secret disparaît, sans avertissement possible, puisque Janus ignore son existence. C'est l'équivalent de l'écrasement d'un volume caché VeraCrypt. Pour changer un visage, il faut refabriquer le fichier avec les deux. *Outil : `janus modifier` exige l'identifiant de chaque visage et refuse de produire un fichier qui en perdrait un.*
 3. **Le leurre doit être crédible.** Un fichier de 2 Mo dont le leurre est une liste de courses de 12 octets ne trahit rien par sa taille, puisque la réserve est fixe (64 Kio). En revanche, ce leurre est peu vraisemblable comme chose à chiffrer. La cryptographie ne remplace pas le bon sens.
-4. **Deux visages au plus.** Avec deux étiquettes, l'adversaire sait qu'il n'existe pas de troisième visage. S'il obtient deux identifiants valides, il sait qu'il a tout. Passer à 4 étiquettes ne coûterait que 64 octets et permettrait de toujours prétendre « il n'y en a pas d'autre » (QB-3).
+4. **Nombre de visages borné.** *Réglé par QB-3 : avec 4 étiquettes, l'adversaire qui a obtenu deux identifiants ne peut pas savoir s'il en existe un troisième ou un quatrième. Texte d'origine :* Avec deux étiquettes, l'adversaire sait qu'il n'existe pas de troisième visage. S'il obtient deux identifiants valides, il sait qu'il a tout. Passer à 4 étiquettes ne coûterait que 64 octets et permettrait de toujours prétendre « il n'y en a pas d'autre » (QB-3).
 5. **Signature (piste E) incompatible.** Un leurre signé reste possible, mais le secret ne doit pas être signé avec la même clé.
 6. **Traces du système.** Ouvrir le secret écrit son clair sur le disque. Il vaut mieux l'ouvrir dans un dossier lui-même chiffré, ou **en mémoire** : `janus dechiffrer … -` vérifie tout en mémoire et écrit sur la sortie standard, sans créer de fichier en clair.
 7. **La ligne de commande doit rester muette.** Aucune option, aucun message, aucun code de retour ne doit différer selon qu'il existe un visage caché.
 8. **Un même fichier peut montrer deux contenus à deux destinataires.** Un auteur malveillant peut mettre Alice dans un visage et Bob dans l'autre. Comparer l'empreinte du fichier chiffré ne prouve donc pas qu'on a lu la même chose : il faut comparer l'empreinte **du clair**. C'est le prix du déni, et c'est borné à deux contenus ([05-preuve-integrite.md](05-preuve-integrite.md), § 7.1).
 9. **Un tiers peut effacer le secret sans que le leurre s'en aperçoive.** Il lui suffit d'écraser la réserve. Garde une copie, et vérifie de temps en temps, avec le second identifiant, que le secret s'ouvre encore ([05-preuve-integrite.md](05-preuve-integrite.md), § 7.2).
+10. **`janus modifier` ne conserve que les visages dont tu donnes l'identifiant.** Avec 4 étiquettes, Janus ne peut pas savoir combien de visages cachés existent : le savoir trahirait le déni. Si tu oublies l'identifiant d'un visage caché, le nouveau fichier ne le contient plus (l'ancien reste intact). Donne toujours **tous** tes identifiants à `modifier`, et garde l'ancien fichier jusqu'à avoir vérifié le nouveau.
 
 ---
 
@@ -270,6 +274,6 @@ Tout ce qui suit `--cache` décrit le visage caché : ses destinataires, puis so
 | **QB-1** | Taille de la réserve : fixe (64 Kio), `max(64 Kio, L₁/16)` ou `max(64 Kio, L₁/8)` ? | **Décidé le 18 novembre 2026 : `Réserve = max(64 Kio, ⌈L₁/16⌉)`**, soit `R_min` = 65 536 et `ρ` = 16. Environ 6 % de plus par fichier, de quoi cacher un document, et un secret de 64 Kio possible même derrière un petit leurre |
 | *QB-2 à QB-4* | *Recommandations ci-dessous adoptées provisoirement pour le prototype* | |
 | **QB-2** | Une option « sans réserve » ? Elle produirait des fichiers dont on peut prouver qu'ils n'ont pas de visage caché | Pas en v1. Si elle existe, la réserve doit rester le comportement par défaut, pour que « j'ai utilisé le réglage par défaut » reste une réponse crédible |
-| **QB-3** | 2 ou 4 étiquettes (donc visages) ? | 2 pour v1, fidèle au nom. Le passage à 4 ne coûte que 64 octets et pourra se décider après le prototype |
+| **QB-3** | 2 ou 4 étiquettes (donc visages) ? | **Décidé le 19 novembre 2026 : 4 étiquettes**, soit un leurre et jusqu'à 3 visages cachés qui se partagent la réserve. Coût : 64 octets par fichier. *Recommandation initiale :* 2 pour v1, fidèle au nom. Le passage à 4 ne coûte que 64 octets et pourra se décider après le prototype |
 | **QB-4** | v1 remplace-t-il v0 ? | Oui : v0 n'est ni figé ni diffusé, et une structure unique est le cœur du déni |
 | **QB-5** | Preuve formelle | **Rédigée : [04-preuve-deux-visages.md](04-preuve-deux-visages.md)** (preuve papier par séquence de jeux, non vérifiée par machine). Elle a révélé que le scalaire éphémère clampé du code casse le déni face à un adversaire quantique, et que la discrétion repose sur MLWE seul. Correctifs proposés au § 8 de ce document |

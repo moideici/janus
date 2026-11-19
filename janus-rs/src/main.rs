@@ -392,7 +392,12 @@ fn modifier(args: &[String]) -> Result<(), String> {
         format::chiffrer_flux(principal, visages, &mut w).map_err(|e| e.to_string())?;
         w.flush().map_err(|e| e.to_string())
     })?;
-    eprintln!("{nouveau} : {} visage(s) rechiffré(s) avec un aléa neuf.", specs.len());
+    eprintln!(
+        "{nouveau} : seuls les {} visages donnés sont conservés, rechiffrés avec un aléa neuf. Janus ne peut pas \
+         savoir s'il en existait d'autres : tout visage caché dont l'identifiant n'a pas été donné ici est perdu \
+         dans le nouveau fichier (l'ancien reste intact).",
+        specs.len()
+    );
     Ok(())
 }
 

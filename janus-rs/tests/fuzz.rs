@@ -13,7 +13,7 @@
 //!   JANUS_FUZZ_ITER=100000 cargo test --release --test fuzz -- --nocapture
 
 use janus::alea;
-use janus::format::{self, Destinataires, Ouverture, H, TB};
+use janus::format::{self, Destinataires, Ouverture, H, N_ETIQ, OFF_SEL, TB};
 use janus::xwing::Identite;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
@@ -107,14 +107,13 @@ fn verifier(r: std::thread::Result<Result<zeroize::Zeroizing<Vec<u8>>, format::I
             assert!(&c[..] == clair, "AUTRE CLAIR rendu : {quoi}");
             assert_eq!(g.len(), f.len(), "taille changée mais acceptée : {quoi}");
             let fin_visage = H + format::taille_chiffree(clair.len() as u64) as usize;
-            // Seuls sont hors du visage ouvert : l'étiquette de l'autre visage (T_0 ou
-            // T_1, jamais les deux) et la réserve.
+            // Seuls sont hors du visage ouvert : les étiquettes des autres visages (jamais
+            // toutes, puisque l'une est la sienne) et la réserve.
             let diff: Vec<usize> = (0..f.len()).filter(|&p| f[p] != g[p]).collect();
-            let interdit = diff.iter().find(|&&p| (64..fin_visage).contains(&p));
+            let interdit = diff.iter().find(|&&p| (OFF_SEL..fin_visage).contains(&p));
             assert!(interdit.is_none(), "octet {interdit:?} de l'en-tête ou du visage modifié mais accepté : {quoi}");
-            let t0 = diff.iter().any(|&p| p < 32);
-            let t1 = diff.iter().any(|&p| (32..64).contains(&p));
-            assert!(!(t0 && t1), "les deux étiquettes modifiées mais accepté : {quoi}");
+            let touchees = (0..N_ETIQ).filter(|x| diff.iter().any(|&p| p / 32 == *x && p < OFF_SEL)).count();
+            assert!(touchees < N_ETIQ, "toutes les étiquettes modifiées mais accepté : {quoi}");
             true
         }
     }
@@ -144,6 +143,25 @@ fn mutations_jamais_acceptees() {
     )
     .unwrap();
     sources.push((f2, leurre));
+    // Quatre visages (QB-3) : Alice ouvre le leurre, trois secrets occupent la réserve.
+    let leurre4 = octets_aleatoires(3 * TB);
+    let secrets: Vec<Vec<u8>> = [9_000usize, 14_000, 21_000].iter().map(|&n| octets_aleatoires(n)).collect();
+    let cles_caches: Vec<[u8; 1216]> = (0..3).map(|_| *Identite::generer().cle_publique()).collect();
+    let mut lecteurs: Vec<&[u8]> = secrets.iter().map(|s| &s[..]).collect();
+    let caches = lecteurs
+        .iter_mut()
+        .zip(&cles_caches)
+        .zip(&secrets)
+        .map(|((l, k), s)| format::Visage {
+            entree: l,
+            longueur: s.len() as u64,
+            dest: Destinataires::Cles(std::slice::from_ref(k)),
+        })
+        .collect();
+    let mut f4 = Vec::new();
+    let principal = format::Visage { entree: &mut &leurre4[..], longueur: leurre4.len() as u64, dest: Destinataires::Cles(&[pk]) };
+    format::chiffrer_flux(principal, caches, &mut f4).unwrap();
+    sources.push((f4, leurre4));
     let etranger = format::chiffrer(b"autre", Destinataires::Cles(&[pk])).unwrap();
 
     let (mut identiques, mut dans_la_reserve) = (0, 0);

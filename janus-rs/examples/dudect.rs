@@ -168,8 +168,9 @@ fn main() {
     // déballe (étiquettes invalides) ne doit pas s'ouvrir plus lentement qu'un fichier
     // où rien ne se déballe. Les deux échouent ; seul le temps pourrait les distinguer.
     let etiquettes_cassees = |mut f: Vec<u8>| {
-        f[0] ^= 1;
-        f[32] ^= 1;
+        for x in 0..format::N_ETIQ {
+            f[32 * x] ^= 1;
+        }
         f
     };
     let deballe: Vec<Vec<u8>> =

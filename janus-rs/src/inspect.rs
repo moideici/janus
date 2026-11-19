@@ -1067,7 +1067,7 @@ impl fmt::Display for Rapport {
                 )?;
                 writeln!(
                     f,
-                    "  Il cache peut-être un second visage d'au plus {} octets : rien ne permet de le savoir.",
+                    "  Il cache peut-être jusqu'à 3 autres visages, d'au plus {} octets en tout : rien ne permet de le savoir.",
                     nombre(crate::format::capacite_cachee(*clair_max))
                 )?;
                 writeln!(

@@ -9,7 +9,7 @@ Une release invite d'autres personnes à utiliser l'outil, et à garder des fich
 1. **Le format bouge encore.**
    - Il a changé trois fois depuis le 18 novembre : passage aux deux visages, éphémère uniforme, masquage de `κ`. Les vecteurs de test ont été régénérés à chaque fois.
    - L'encodage texte des clés est provisoire (spec, question Q7).
-   - Deux choix restent ouverts : 2 ou 4 étiquettes (QB-3), étiquette sur tout le corps ou non (QI-1).
+   - Un choix reste ouvert : étiquette sur tout le corps ou non (QI-1). *QB-3 est tranché : 4 étiquettes (19 novembre 2026).*
    - Un fichier chiffré aujourd'hui pourrait ne plus s'ouvrir demain.
 2. **Les tests n'ont tourné que sur une seule machine Windows.** Il n'y a ni intégration continue, ni compilation pour Linux et macOS.
 3. **Il manque des éléments de base pour un outil distribué :**
@@ -42,7 +42,8 @@ Une **pré-release** GitHub, marquée comme telle, pour essayer Janus et le crit
 
 - **Figer l'encodage texte des clés** (Q7) : préfixes versionnés et somme de contrôle définitive.
 - **Lire l'entrée standard et écrire sur la sortie standard**, pour chiffrer dans un tube.
-- **Trancher QB-3** (2 ou 4 étiquettes) et **QI-1** (étiquette sur tout le corps).
+- ~~**Trancher QB-3**~~ **Fait** : 4 étiquettes, jusqu'à 3 visages cachés. Reste **QI-1** (étiquette sur tout le corps).
+- ~~**Lire l'entrée standard et écrire sur la sortie standard**~~ **Fait**, avec l'ouverture en mémoire et `janus modifier`.
 - **Statistiques et fuzzing :** passer la batterie NIST STS, et lancer `cargo-fuzz` avec mesure de couverture (il faut la chaîne d'outils nightly, à installer avec ton accord).
 - **Comparer avec age** : débit, taille des fichiers, et ce que révèle `janus inspect`.
 
