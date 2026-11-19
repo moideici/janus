@@ -1,0 +1,11 @@
+# Compilation Rust
+janus-rs/target/
+
+# Configuration locale de l'outil d'édition
+.claude/
+
+# Fichiers temporaires de janus (écriture atomique)
+*.janus-tmp
+
+# Cours de cryptographie : gardé en local, hors du dépôt
+cours/

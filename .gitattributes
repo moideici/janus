@@ -1,0 +1,7 @@
+# Fins de ligne LF partout dans le dépôt.
+* text=auto eol=lf
+
+# Vecteurs de test et échantillons : comparés octet pour octet, aucune conversion.
+janus-rs/vecteurs/** -text
+janus-rs/tests/echantillons/** -text
+*.janus binary

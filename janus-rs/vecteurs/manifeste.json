@@ -1,0 +1,70 @@
+{
+  "format": "Janus v1 à deux visages (docs/03-deux-visages.md, sur la base de docs/02-spec-v0.md)",
+  "clair": "octet k = (31*k + 7) mod 256, sur clair_longueur octets",
+  "graines": "identité X-Wing du destinataire i (à partir de 0) : 32 octets valant i+1",
+  "vecteurs": [
+    {
+      "nom": "mot-de-passe",
+      "fichier": "mot-de-passe.janus",
+      "taille": 91954,
+      "sha256_fichier": "6d224990d8d5f56b9b8abdb0e893d000378c749565d232917d43f6472439fd9d",
+      "ouverture": { "type": "mot_de_passe", "valeur": "janus" },
+      "clair_longueur": 13,
+      "sha256_clair": "dc898e8ef5663ef7a22697ee877b3c4d62ac6f2a60d87187432172e46ece2cc4"
+    },
+    {
+      "nom": "une-cle",
+      "fichier": "une-cle.janus",
+      "taille": 92139,
+      "sha256_fichier": "0feb65f9ae385179c8ac4471d5d9927f3487c9aca57c79b2d122544b5142ff4c",
+      "ouverture": { "type": "identites", "chacune_ouvre": ["0101010101010101010101010101010101010101010101010101010101010101"] },
+      "clair_longueur": 13,
+      "sha256_clair": "dc898e8ef5663ef7a22697ee877b3c4d62ac6f2a60d87187432172e46ece2cc4"
+    },
+    {
+      "nom": "seize-cles",
+      "fichier": "seize-cles.janus",
+      "taille": 93757,
+      "sha256_fichier": "b0ed95ec811a1202fe08ca69cb8e99b1fea96d9a6921774cb611db58acfb1ad7",
+      "ouverture": { "type": "identites", "chacune_ouvre": ["0101010101010101010101010101010101010101010101010101010101010101", "0202020202020202020202020202020202020202020202020202020202020202", "0303030303030303030303030303030303030303030303030303030303030303", "0404040404040404040404040404040404040404040404040404040404040404", "0505050505050505050505050505050505050505050505050505050505050505", "0606060606060606060606060606060606060606060606060606060606060606", "0707070707070707070707070707070707070707070707070707070707070707", "0808080808080808080808080808080808080808080808080808080808080808", "0909090909090909090909090909090909090909090909090909090909090909", "0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a", "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b", "0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c", "0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d0d", "0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e", "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f", "1010101010101010101010101010101010101010101010101010101010101010"] },
+      "clair_longueur": 1000,
+      "sha256_clair": "5097e7d587352f5097062ae679f37bda5802d9f875aba14c8cb4d1a188ada179"
+    },
+    {
+      "nom": "vide",
+      "fichier": "vide.janus",
+      "taille": 91793,
+      "sha256_fichier": "6ac8d110da7aa6e7e3e9e0a2feeafe309add42cb0c3a4a6f0ee277a2544be184",
+      "ouverture": { "type": "identites", "chacune_ouvre": ["0101010101010101010101010101010101010101010101010101010101010101"] },
+      "clair_longueur": 0,
+      "sha256_clair": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "nom": "un-bloc-exact",
+      "fichier": "un-bloc-exact.janus",
+      "taille": 159340,
+      "sha256_fichier": "2213840e716ea3900f57665976a943d9628b8df78631d374015585b68e07af40",
+      "ouverture": { "type": "identites", "chacune_ouvre": ["0101010101010101010101010101010101010101010101010101010101010101"] },
+      "clair_longueur": 65536,
+      "sha256_clair": "ef4636928161808e87035fa51983821677527ccd9661991c5d0126a778b2268a"
+    },
+    {
+      "nom": "deux-blocs",
+      "fichier": "deux-blocs.janus",
+      "taille": 158931,
+      "sha256_fichier": "a031de8faa90f6cdd3ae95afccc2240549277052a8b26d45aa5031514d4ee5b3",
+      "ouverture": { "type": "identites", "chacune_ouvre": ["0101010101010101010101010101010101010101010101010101010101010101"] },
+      "clair_longueur": 65537,
+      "sha256_clair": "74f3260f4a9adaf7271c910ba2d111dbae7a176afb487e1b7f655897eadf1093"
+    },
+    {
+      "nom": "deux-visages",
+      "fichier": "deux-visages.janus",
+      "taille": 92762,
+      "sha256_fichier": "661dc440fe24bf9bd1ce3409c851813ed3f9c5914eab1b55359a0349e36b4d58",
+      "ouverture": { "type": "mot_de_passe", "valeur": "janus", "visage_cache": { "mot_de_passe": "visage", "clair": "octet k = (17*k + 3) mod 256", "clair_longueur": 700, "sha256_clair": "049ac08aabbbbae60ea2dfdabeb15f85cced1be2e46e6b196e80e8d3a1ce47c1" } },
+      "clair_longueur": 1000,
+      "sha256_clair": "5097e7d587352f5097062ae679f37bda5802d9f875aba14c8cb4d1a188ada179"
+    }
+  ]
+}
