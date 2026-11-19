@@ -27,14 +27,48 @@ const AVERTISSEMENT: &str =
     "Prototype de recherche : format non figé, ne pas l'utiliser pour de vrais secrets.";
 const TAMPON: usize = 1 << 20;
 
+/// Version du programme et du format, affichée par `janus --version`.
+fn version() -> String {
+    format!(
+        "janus {} (format Janus v1, aperçu non figé : un fichier chiffré avec cette version \
+         pourrait ne plus s'ouvrir avec une version suivante)",
+        env!("CARGO_PKG_VERSION")
+    )
+}
+
+const AIDE: &str = "\
+Usage :
+  janus cles <fichier-identité>
+      Crée une identité (clé secrète) dans le fichier et affiche la clé publique.
+  janus publique <fichier-identité>
+      Réaffiche la clé publique d'une identité.
+  janus chiffrer <destinataires> <entrée> <sortie> [--cache <destinataires> <entrée-secrète>]
+      Chiffre <entrée> (le visage principal, ou leurre). Avec --cache, cache en plus
+      <entrée-secrète> dans le même fichier (le visage caché). Le secret doit tenir
+      dans la réserve : 1/16 de la taille du leurre, et au moins 64 Kio.
+  janus dechiffrer (-i <fichier-identité>… | -m) <entrée> <sortie>
+      Ouvre le visage qui correspond à l'identifiant donné. N'indique jamais si un
+      autre visage existe.
+  janus inspect <fichier>…
+      Montre ce qu'un tiers apprend d'un fichier sans clé (Janus, gpg, age, ZIP, 7-Zip…).
+  janus --version | --help
+
+<destinataires> :
+  -r <clé publique>     clé publique en argument (répétable)
+  -R <fichier>          clés publiques lues dans un fichier, une par ligne (répétable)
+  -m                    mot de passe, demandé au clavier ; seul dans son visage
+  16 destinataires au plus, pour les deux visages réunis.
+
+Exemples :
+  janus cles moi.cle > moi.pub
+  janus chiffrer -R moi.pub photo.jpg photo.janus
+  janus chiffrer -m vacances.zip coffre.janus --cache -m journal.txt
+  janus dechiffrer -m coffre.janus sortie
+
+Documentation : https://docs.moideici.tech/janus/";
+
 fn usage() -> ExitCode {
-    eprintln!(
-        "{AVERTISSEMENT}\n\nUsage :\n  janus cles <fichier-identité>\n  janus publique <fichier-identité>\n  \
-         janus chiffrer (-r <clé> | -R <fichier-clé> | -m)… <entrée> <sortie> \
-         [--cache (-r <clé> | -R <fichier-clé> | -m)… <entrée-secrète>]\n  \
-         janus dechiffrer (-i <fichier-identité> | -m)… <entrée> <sortie>\n  \
-         janus inspect <fichier>…"
-    );
+    eprintln!("{AVERTISSEMENT}\n\n{AIDE}");
     ExitCode::from(2)
 }
 
@@ -195,6 +229,14 @@ fn dechiffrer(args: &[String]) -> Result<(), String> {
 
 fn executer(args: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str) {
+        Some("--version" | "-V") => {
+            println!("{}", version());
+            Ok(())
+        }
+        Some("--help" | "-h" | "aide") => {
+            println!("{}\n{AVERTISSEMENT}\n\n{AIDE}", version());
+            Ok(())
+        }
         Some("cles") if args.len() == 2 => {
             let id = Identite::generer();
             let pub_txt = cles::publique_vers_texte(id.cle_publique());

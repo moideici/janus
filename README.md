@@ -1,5 +1,7 @@
 # Janus
 
+[![CI](https://github.com/moideici/janus/actions/workflows/ci.yml/badge.svg)](https://github.com/moideici/janus/actions/workflows/ci.yml)
+
 **Un format de chiffrement de fichiers post-quantique, indistinguable de l'aléa, et à deux visages.**
 
 > ⚠️ **Prototype de recherche.** Le format n'est pas figé, le code n'a eu aucun audit externe, et les preuves de sécurité n'ont été relues par personne. **Ne l'utilise pas pour de vrais secrets.** Voir le [plan de release](docs/07-plan-release.md).
@@ -56,6 +58,8 @@ cargo build --release
 
 Les détails et les limites sont dans [janus-rs/README.md](janus-rs/README.md).
 
-## Licence
+## Versions, sécurité, licence
 
-[MIT](LICENSE).
+- [Journal des versions](CHANGELOG.md) et [plan de release](docs/07-plan-release.md).
+- Pour signaler une faille, voir la [politique de sécurité](SECURITY.md).
+- Licence [MIT](LICENSE). Celles des dépendances sont listées dans [docs/licences-dependances.md](docs/licences-dependances.md).

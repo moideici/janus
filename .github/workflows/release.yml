@@ -1,0 +1,98 @@
+# Release : déclenchée par une étiquette v* (par exemple v0.1.0-alpha).
+# 1. Vérifie que l'étiquette correspond à la version de Cargo.toml.
+# 2. Teste et compile sous Linux, Windows et macOS.
+# 3. Publie les archives et leurs empreintes SHA-256 dans une release GitHub,
+#    marquée « pré-release » si la version contient un tiret (-alpha, -beta…).
+#    Les notes viennent de docs/notes-de-version/<étiquette>.md.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  binaires:
+    name: Binaire ${{ matrix.cible }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: ubuntu-latest
+            cible: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            cible: x86_64-pc-windows-msvc
+          - os: macos-latest
+            cible: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: janus-rs
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Étiquette = version de Cargo.toml
+        run: |
+          version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "étiquette $GITHUB_REF_NAME ≠ version v$version"; exit 1; }
+          test -f "../docs/notes-de-version/$GITHUB_REF_NAME.md" || { echo "notes de version absentes"; exit 1; }
+
+      - name: Rust stable
+        run: |
+          rustup update stable --no-self-update
+          rustup default stable
+
+      - name: Tests
+        run: cargo test --release --locked
+
+      - name: Compilation
+        run: cargo build --release --locked
+
+      - name: Archive
+        run: |
+          nom="janus-${GITHUB_REF_NAME}-${{ matrix.cible }}"
+          mkdir -p "../dist/$nom"
+          ext=""; [ "$RUNNER_OS" = "Windows" ] && ext=".exe"
+          cp "target/release/janus$ext" "../dist/$nom/"
+          cp ../LICENSE ../README.md ../docs/licences-dependances.md "../dist/$nom/"
+          # rpassword et rtoolbox sont sous Apache-2.0 seule : on joint le texte de la licence.
+          cp "$(ls -d ~/.cargo/registry/src/*/rpassword-*/ | head -1)LICENSE-APACHE" "../dist/$nom/LICENSE-APACHE-2.0.txt"
+          cd ../dist
+          if [ "$RUNNER_OS" = "Windows" ]; then 7z a -tzip "$nom.zip" "$nom" > /dev/null; else tar czf "$nom.tar.gz" "$nom"; fi
+          rm -rf "$nom"
+          ls -l
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.cible }}
+          path: dist/*
+
+  publication:
+    name: Publication
+    needs: binaires
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Empreintes SHA-256
+        run: cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      - name: Release GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          options=""
+          case "$GITHUB_REF_NAME" in *-*) options="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --verify-tag \
+            --title "Janus $GITHUB_REF_NAME" \
+            --notes-file "docs/notes-de-version/$GITHUB_REF_NAME.md" \
+            $options

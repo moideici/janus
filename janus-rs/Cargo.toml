@@ -2,7 +2,7 @@
 name = "janus-rs"
 license = "MIT"
 description = "Prototype de recherche de Janus : chiffrement de fichiers post-quantique, indistinguable de l'aléa, à deux visages"
-version = "0.1.0"
+version = "0.1.0-alpha"
 edition = "2024"
 repository = "https://github.com/moideici/janus"
 homepage = "https://docs.moideici.tech/janus/"

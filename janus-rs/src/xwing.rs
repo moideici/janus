@@ -116,17 +116,18 @@ pub fn encapsuler_derand(pk: &[u8; TAILLE_PK], eseed: &[u8; 64]) -> ([u8; 32], V
     (*ss, ct)
 }
 
-/// Encapsulation Janus (spec § 6.1). Renvoie (ss, représentant r, κ masqué).
-pub fn encapsuler_cache(
-    pk: &[u8; TAILLE_PK],
-) -> Option<(Zeroizing<[u8; 32]>, [u8; 32], [u8; kemeleon::TAILLE_ENCODEE])> {
+/// Résultat d'une encapsulation cachée : (ss, représentant r, κ masqué).
+pub type EncapsulationCachee = (Zeroizing<[u8; 32]>, [u8; 32], [u8; kemeleon::TAILLE_ENCODEE]);
+
+/// Encapsulation Janus (spec § 6.1).
+pub fn encapsuler_cache(pk: &[u8; TAILLE_PK]) -> Option<EncapsulationCachee> {
     let ek_m = cle_ml_kem(pk)?;
     let pk_x: [u8; 32] = pk[TAILLE_PK_M..].try_into().unwrap();
 
     let (r, ct_x, e) = ephemere_cache();
     // Le destinataire calcule clamp(sk)·P = clamp(sk)·(e·B + L) = e·clamp(sk)·B = e·pk_X,
     // car clamp(sk) est multiple de 8 et annule L.
-    let ss_x = Zeroizing::new((&MontgomeryPoint(pk_x) * &*e).to_bytes());
+    let ss_x = Zeroizing::new((MontgomeryPoint(pk_x) * *e).to_bytes());
 
     let mut m = ml_kem::B32::try_from(&alea::octets::<32>()[..]).unwrap();
     let (ct_m, ss_m) = ek_m.encapsulate_deterministic(&m);

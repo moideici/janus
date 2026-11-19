@@ -413,7 +413,7 @@ fn verifier_regles(visages: &[Description]) -> Result<(), ErreurChiffrement> {
     for v in visages {
         total += match v.dest {
             Destinataires::MotDePasse(_) => 1,
-            Destinataires::Cles(c) if c.is_empty() => return Err(ErreurChiffrement::AucunDestinataire),
+            Destinataires::Cles([]) => return Err(ErreurChiffrement::AucunDestinataire),
             Destinataires::Cles(c) => c.len(),
         };
     }
@@ -434,8 +434,11 @@ fn verifier_regles(visages: &[Description]) -> Result<(), ErreurChiffrement> {
     Ok(())
 }
 
+/// Clés de fichier K, une par visage, effacées à la destruction.
+type ClesVisages = Vec<Zeroizing<[u8; 32]>>;
+
 /// En-tête complet (T_0 ‖ T_1 ‖ sel ‖ E_0 … E_15) et clé de chaque visage.
-fn construire_entete(f: u64, visages: &[Description]) -> Result<(Vec<u8>, Vec<Zeroizing<[u8; 32]>>), ErreurChiffrement> {
+fn construire_entete(f: u64, visages: &[Description]) -> Result<(Vec<u8>, ClesVisages), ErreurChiffrement> {
     verifier_regles(visages)?;
     let mut entete = vec![0u8; H];
     // Étiquettes, sel et emplacements commencent remplis d'aléa (§ 4.3 de v0, R4).
@@ -507,11 +510,10 @@ pub fn chiffrer_flux_interne<W: Write>(
 ) -> Result<u64, ErreurChiffrement> {
     let l1 = principal.longueur;
     let c1 = taille_chiffree(l1);
-    if let Some(v) = &cache {
-        if taille_chiffree(v.longueur) > reserve(l1) {
+    if let Some(v) = &cache
+        && taille_chiffree(v.longueur) > reserve(l1) {
             return Err(ErreurChiffrement::SecretTropGrand { capacite: capacite_cachee(l1) });
         }
-    }
     let f = tirer_taille(l1);
     let b = f - H as u64;
 

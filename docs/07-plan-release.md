@@ -27,14 +27,14 @@ Aucune de ces raisons n'est une faiblesse cryptographique connue. Les preuves (d
 
 Une **pré-release** GitHub, marquée comme telle, pour essayer Janus et le critiquer. Elle n'est pas destinée à de vrais secrets.
 
-| Travail | Critère de fin |
-|---|---|
-| Intégration continue GitHub Actions : compilation, 56 tests, `clippy`, sous Linux, Windows et macOS | Les trois systèmes sont au vert |
-| `janus --version` et `janus --help`, avec la mention du format (« Janus v1, aperçu non figé ») | Les deux commandes répondent |
-| Binaires Linux, Windows et macOS produits par l'intégration continue à chaque étiquette `v*`, avec leurs empreintes SHA-256 | Le premier tag produit les trois binaires |
-| `CHANGELOG.md` et `SECURITY.md` | Les deux fichiers sont présents |
-| Notes de version claires : aperçu, format non figé, aucun audit, compatibilité non garantie | Texte relu |
-| Vérification des licences des dépendances (MIT, Apache-2.0 ou BSD) | Liste jointe aux notes |
+| Travail | Critère de fin | État (19 novembre 2026) |
+|---|---|---|
+| Intégration continue GitHub Actions : compilation, 56 tests, `clippy`, sous Linux, Windows et macOS | Les trois systèmes sont au vert | Écrite (`.github/workflows/ci.yml`) ; `clippy -D warnings` est propre en local |
+| `janus --version` et `janus --help`, avec la mention du format (« Janus v1, aperçu non figé ») | Les deux commandes répondent | **Fait** |
+| Binaires Linux, Windows et macOS produits par l'intégration continue à chaque étiquette `v*`, avec leurs empreintes SHA-256 | Le premier tag produit les trois binaires | Écrit (`.github/workflows/release.yml`), pas encore déclenché |
+| `CHANGELOG.md` et `SECURITY.md` | Les deux fichiers sont présents | **Fait** |
+| Notes de version claires : aperçu, format non figé, aucun audit, compatibilité non garantie | Texte relu | Écrites ([`notes-de-version/v0.1.0-alpha.md`](notes-de-version/v0.1.0-alpha.md)), à relire |
+| Vérification des licences des dépendances (MIT, Apache-2.0 ou BSD) | Liste jointe aux notes | **Fait** ([`licences-dependances.md`](licences-dependances.md)) : 65 crates, toutes compatibles |
 
 **Ce qui déclenche la release :** tous les critères ci-dessus remplis, puis ton accord explicite.
 

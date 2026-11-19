@@ -268,11 +268,10 @@ fn identifier<R: Read + Seek>(r: &mut R, taille: u64, tete: &[u8]) -> io::Result
     if let Some(f) = openpgp(tete, taille) {
         return Ok(Some(f));
     }
-    if tete.starts_with(b"PK\x03\x04") || tete.starts_with(b"PK\x05\x06") {
-        if let Some(f) = zip(r, taille)? {
+    if (tete.starts_with(b"PK\x03\x04") || tete.starts_with(b"PK\x05\x06"))
+        && let Some(f) = zip(r, taille)? {
             return Ok(Some(f));
         }
-    }
     if tete.starts_with(&[0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C]) && tete.len() >= 32 {
         return Ok(Some(sept_zip(r, taille, tete)?));
     }
@@ -632,11 +631,10 @@ fn pgp_binaire(d: &[u8], total: Option<u64>) -> Option<Format> {
                 let b = d.get(corps..)?;
                 let donnees = match p.longueur {
                     Some(l) => {
-                        if let Some(t) = total {
-                            if (corps + l) as u64 != t {
+                        if let Some(t) = total
+                            && (corps + l) as u64 != t {
                                 return None;
                             }
-                        }
                         Some(l as u64)
                     }
                     None => total.and_then(|t| t.checked_sub(corps as u64)),
@@ -914,7 +912,7 @@ fn signature_simple(t: &[u8], taille: u64) -> Option<Format> {
              déchiffre en un clair altéré, sans alerte."
                 .into(),
         );
-        f.clair = Some(if n % 16 == 0 && n > 0 { TailleClair::Entre(n - 16, n - 1) } else { TailleClair::Exacte(n) });
+        f.clair = Some(if n.is_multiple_of(16) && n > 0 { TailleClair::Entre(n - 16, n - 1) } else { TailleClair::Exacte(n) });
         f.fuites.push("La taille du clair, au bloc de 16 octets près.".into());
         return Some(f);
     }
@@ -978,7 +976,7 @@ pub fn nombre(n: u64) -> String {
     let s = n.to_string();
     let mut r = String::new();
     for (i, c) in s.chars().enumerate() {
-        if i > 0 && (s.len() - i) % 3 == 0 {
+        if i > 0 && (s.len() - i).is_multiple_of(3) {
             r.push(' ');
         }
         r.push(c);
