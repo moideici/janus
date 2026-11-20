@@ -33,7 +33,7 @@ cargo build --release
 
 | Dossier | Contenu |
 |---|---|
-| [`janus-rs/`](janus-rs/README.md) | Le prototype en Rust : bibliothèque, ligne de commande `janus`, 67 tests, vecteurs de test, banc d'essai, test de temps constant (dudect) |
+| [`janus-rs/`](janus-rs/README.md) | Le prototype en Rust : bibliothèque, ligne de commande `janus`, 70 tests, vecteurs de test, banc d'essai, test de temps constant (dudect) |
 | [`spec/janus-v1.md`](spec/janus-v1.md) | **La spécification normative du format, en anglais** : tout ce qu'il faut pour écrire une autre implémentation |
 | [`clients/`](clients/README.md) | Quatre implémentations indépendantes écrites à partir de la spécification seule (Python, TypeScript, C#, Java), et le test d'interopérabilité croisée |
 | [`docs/`](docs/) | La conception et les preuves, de la cartographie au plan de release (voir ci-dessous) |
@@ -49,6 +49,7 @@ cargo build --release
 | 05 | [Preuve d'intégrité](docs/05-preuve-integrite.md) | Engagement, cohérence par visage, absence d'oracle de partition |
 | 06 | [Preuve de confidentialité active](docs/06-preuve-confidentialite-active.md) | IND-RCCA, et pourquoi IND-CCA strict est impossible avec deux visages |
 | 07 | [Plan de release](docs/07-plan-release.md) | Ce qui manque avant une première version, et dans quel ordre |
+| 08 | [Durcissement](docs/08-durcissement.md) | Mémoire, fuzzing guidé par la couverture, chaîne d'approvisionnement, builds reproductibles, releases signées |
 
 ## Ce qui est vérifié
 
@@ -57,6 +58,7 @@ cargo build --release
 - **Discrétion :** les fichiers passent le test du χ², alors que les chiffrés ML-KEM bruts sont détectés. L'éphémère X25519 est uniforme, même face à un adversaire capable de calculer des logarithmes discrets.
 - **Déni :** ce que voit l'adversaire contraint suit la même loi avec ou sans secret (test d'homogénéité, p = 0,58 en mélangeant des fichiers à 1 et à 3 visages cachés).
 - **Temps constant :** dudect ne détecte aucune fuite sur Kemeleon, Elligator, la décapsulation ou l'ouverture. Le test lui-même sait repérer une fuite : il la détecte sur un témoin volontairement vulnérable.
+- **Durcissement :** aucun code `unsafe` hors d'un petit module de verrouillage mémoire ; secrets verrouillés en mémoire vive ; fuzzing guidé par la couverture chaque nuit ; dépendances vérifiées par cargo-deny ; binaire Linux reproductible ; releases signées par Sigstore ([document 08](docs/08-durcissement.md)).
 - **Robustesse :** 80 000 mutations de fuzzing (50 000, puis 30 000 après QB-3, dont un fichier à quatre visages) ne produisent jamais de panique, ni d'autre clair que l'original.
 
 Les détails et les limites sont dans [janus-rs/README.md](janus-rs/README.md).

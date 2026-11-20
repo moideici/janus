@@ -80,6 +80,12 @@ fn hkdf(ikm: &[u8], info: &[&[u8]]) -> Zeroizing<[u8; 32]> {
 }
 
 fn argon2id(mdp: &[u8], sel: &[u8]) -> Zeroizing<[u8; 32]> {
+    // Sous cargo-fuzz seulement (cfg(fuzzing)), un Argon2id minuscule : avec 64 Mio par
+    // essai, le fuzzing des fichiers à mot de passe serait des milliers de fois plus lent.
+    // Le programme et les tests ordinaires utilisent toujours les vrais paramètres.
+    #[cfg(fuzzing)]
+    let params = Params::new(8, 1, 1, Some(32)).expect("paramètres");
+    #[cfg(not(fuzzing))]
     let params = Params::new(ARGON2_M_KIO, ARGON2_T, ARGON2_P, Some(32)).expect("paramètres");
     let mut sortie = Zeroizing::new([0u8; 32]);
     Argon2::new(Algorithm::Argon2id, Version::V0x13, params)

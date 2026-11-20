@@ -1,0 +1,7 @@
+# Chaîne d'outils épinglée : une même version de rustc est la première condition
+# d'un build reproductible (voir docs/08-durcissement.md). Le fuzzing utilise
+# nightly explicitement (cargo +nightly fuzz …).
+[toolchain]
+channel = "1.97.0"
+components = ["clippy"]
+profile = "minimal"

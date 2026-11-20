@@ -18,7 +18,7 @@ Une release invite d'autres personnes à utiliser l'outil, et à garder des fich
    - une politique de signalement des failles (`SECURITY.md`) ;
    - des binaires produits par l'intégration continue.
 
-Aucune de ces raisons n'est une faiblesse cryptographique connue. Les preuves (documents 04 à 06) et les tests (67, dont 50 000 puis, après QB-3, 30 000 mutations de fuzzing) sont en place. Ce qui manque relève de la stabilité et de l'outillage.
+Aucune de ces raisons n'est une faiblesse cryptographique connue. Les preuves (documents 04 à 06) et les tests (70, dont 50 000 puis, après QB-3, 30 000 mutations de fuzzing) sont en place. Ce qui manque relève de la stabilité et de l'outillage.
 
 ## Gel du format v1 (19 novembre 2026)
 
@@ -64,7 +64,7 @@ Une **pré-release** GitHub, marquée comme telle, pour essayer Janus et le crit
 - **Lire l'entrée standard et écrire sur la sortie standard**, pour chiffrer dans un tube.
 - ~~**Trancher QB-3**~~ **Fait** : 4 étiquettes, jusqu'à 3 visages cachés. ~~QI-1~~ **Tranché** : pas d'étiquette sur tout le corps en v1 (document 06, § 6).
 - ~~**Lire l'entrée standard et écrire sur la sortie standard**~~ **Fait**, avec l'ouverture en mémoire et `janus modifier`.
-- **Statistiques et fuzzing :** passer la batterie NIST STS, et lancer `cargo-fuzz` avec mesure de couverture (il faut la chaîne d'outils nightly, à installer avec ton accord).
+- **Statistiques et fuzzing :** passer la batterie NIST STS. ~~Lancer `cargo-fuzz` avec mesure de couverture~~ **Fait** (20 novembre 2026) : six cibles, chaque nuit en CI, avec le reste du durcissement ([08-durcissement.md](08-durcissement.md)).
 - **Comparer avec age** : débit, taille des fichiers, et ce que révèle `janus inspect`.
 
 ### v0.9.0-beta : candidat au gel du format

@@ -4,6 +4,11 @@
 # 3. Publie les archives et leurs empreintes SHA-256 dans une release GitHub,
 #    marquée « pré-release » si la version contient un tiret (-alpha, -beta…).
 #    Les notes viennent de docs/notes-de-version/<étiquette>.md.
+# 4. Signe chaque fichier par une attestation de provenance Sigstore (sans clé à
+#    gérer) : `gh attestation verify <fichier> --repo moideici/janus` prouve qu'il
+#    a été produit par ce workflow, depuis ce dépôt et cette étiquette.
+# Les chemins sont neutralisés (--remap-path-prefix) et rustc est épinglé : le
+# binaire Linux se reproduit octet pour octet (docs/08-durcissement.md).
 name: Release
 
 on:
@@ -40,16 +45,18 @@ jobs:
           test "v$version" = "$GITHUB_REF_NAME" || { echo "étiquette $GITHUB_REF_NAME ≠ version v$version"; exit 1; }
           test -f "../docs/notes-de-version/$GITHUB_REF_NAME.md" || { echo "notes de version absentes"; exit 1; }
 
-      - name: Rust stable
+      - name: Rust (version épinglée)
         run: |
-          rustup update stable --no-self-update
-          rustup default stable
+          rustup toolchain install
+          rustc --version
 
       - name: Tests
         run: cargo test --release --locked
 
       - name: Compilation
-        run: cargo build --release --locked
+        run: |
+          RUSTFLAGS="--remap-path-prefix=$(cd .. && pwd)=/janus --remap-path-prefix=$HOME/.cargo=/cargo" \
+            cargo build --release --locked
 
       - name: Archive
         run: |
@@ -74,6 +81,10 @@ jobs:
     name: Publication
     needs: binaires
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
 
@@ -84,6 +95,11 @@ jobs:
 
       - name: Empreintes SHA-256
         run: cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      - name: Attestations de provenance (Sigstore)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/*
 
       - name: Release GitHub
         env:

@@ -253,7 +253,8 @@ pub fn encoder_chiffre(ct: &[u8]) -> [u8; TAILLE_ENCODEE] {
     let mut c = vec![0u32; (K + 1) * N];
     byte_decode(DU, &ct[..K * N * DU as usize / 8], &mut c[..K * N]);
     byte_decode(DV, &ct[K * N * DU as usize / 8..], &mut c[K * N..]);
-    let mut hasard = vec![0u8; 12 * (K + 1) * N];
+    // L'aléa des antécédents révélerait κ avant masquage : il est effacé après usage.
+    let mut hasard = zeroize::Zeroizing::new(vec![0u8; 12 * (K + 1) * N]);
     alea::remplir(&mut hasard);
     let u: Vec<u32> = c
         .iter()

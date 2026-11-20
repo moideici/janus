@@ -14,7 +14,10 @@
 //! Pour les tests automatiques seulement, les variables JANUS_MDP et JANUS_MDP_CACHE
 //! fournissent les mots de passe sans les demander.
 
+#![deny(unsafe_code)]
+
 use janus::cles;
+use janus::memoire::{self, TexteSecret, Verrou};
 use janus::format::{self, Destinataires, MAX_CACHES, Ouverture, Visage};
 use janus::xwing::{Identite, TAILLE_PK};
 use std::fs::{self, File};
@@ -84,9 +87,10 @@ fn usage() -> ExitCode {
     ExitCode::from(2)
 }
 
-fn lire_mdp(variable: &str, invite: &str, confirmer: bool) -> Result<Zeroizing<String>, String> {
+/// Mot de passe, effacé à la destruction et verrouillé en mémoire vive.
+fn lire_mdp(variable: &str, invite: &str, confirmer: bool) -> Result<TexteSecret, String> {
     if let Ok(m) = std::env::var(variable) {
-        return Ok(Zeroizing::new(m));
+        return Ok(TexteSecret::new(Zeroizing::new(m)));
     }
     let m = Zeroizing::new(rpassword::prompt_password(format!("{invite} : ")).map_err(|e| e.to_string())?);
     if confirmer {
@@ -98,7 +102,7 @@ fn lire_mdp(variable: &str, invite: &str, confirmer: bool) -> Result<Zeroizing<S
     if m.is_empty() {
         return Err("mot de passe vide".into());
     }
-    Ok(m)
+    Ok(TexteSecret::new(m))
 }
 
 /// J-06 : on écrit dans un fichier temporaire voisin, puis on renomme seulement
@@ -190,8 +194,8 @@ impl Read for Entree {
 
 fn ouvrir_entree(chemin: &str) -> Result<(Entree, u64), String> {
     if chemin == "-" {
-        let mut v = Zeroizing::new(Vec::new());
-        io::stdin().lock().read_to_end(&mut v).map_err(|e| format!("entrée standard : {e}"))?;
+        // Sans read_to_end : ses agrandissements laisseraient des copies du clair dans le tas.
+        let v = memoire::lire_tout(&mut io::stdin().lock()).map_err(|e| format!("entrée standard : {e}"))?;
         let n = v.len() as u64;
         return Ok((Entree::Memoire(Cursor::new(v)), n));
     }
@@ -240,7 +244,7 @@ fn chiffrer(args: &[String]) -> Result<(), String> {
 
     let mut specs = vec![principal];
     specs.extend(caches);
-    let mdps: Vec<Option<Zeroizing<String>>> = specs
+    let mdps: Vec<Option<TexteSecret>> = specs
         .iter()
         .enumerate()
         .map(|(i, s)| if s.mdp { lire_mdp(MDP_ENV[i], MDP_INVITE[i], true).map(Some) } else { Ok(None) })
@@ -289,7 +293,12 @@ fn dechiffrer(args: &[String]) -> Result<(), String> {
     if sortie == "-" {
         // Ouverture EN MÉMOIRE : rien n'est écrit tant que tout n'est pas vérifié
         // (docs/06, § 5), et aucun fichier en clair n'est créé sur le disque.
-        let mut clair = Zeroizing::new(Vec::new());
+        // Tampon alloué une fois pour toutes (le clair est plus petit que le fichier) :
+        // aucun agrandissement, donc aucune copie du clair laissée dans le tas. Il est
+        // verrouillé si le système l'accepte, et effacé avant d'être déverrouillé.
+        let _verrou;
+        let mut clair = Zeroizing::new(Vec::with_capacity(usize::try_from(taille).map_err(|e| e.to_string())?));
+        _verrou = Verrou::sur(clair.spare_capacity_mut());
         format::dechiffrer_flux(&mut lecteur, taille, ouv, &mut *clair).map_err(|e| e.to_string())?;
         let mut out = io::stdout().lock();
         out.write_all(&clair).and_then(|_| out.flush()).map_err(|e| format!("sortie standard : {e}"))
@@ -329,7 +338,7 @@ fn modifier(args: &[String]) -> Result<(), String> {
         return Err(format!("{MAX_CACHES} visage(s) caché(s) au plus"));
     }
     let fichier = fs::read(&ancien).map_err(|e| format!("{ancien} : {e}"))?;
-    let mdps: Vec<Option<Zeroizing<String>>> = specs
+    let mdps: Vec<Option<TexteSecret>> = specs
         .iter()
         .enumerate()
         .map(|(i, s)| if s.mdp { lire_mdp(MDP_ENV[i], MDP_INVITE[i], false).map(Some) } else { Ok(None) })
@@ -478,6 +487,7 @@ fn lire_identite(chemin: &Path) -> Result<Identite, String> {
 }
 
 fn main() -> ExitCode {
+    memoire::durcir_processus();
     let args: Vec<String> = std::env::args().skip(1).collect();
     match executer(&args) {
         Ok(()) => ExitCode::SUCCESS,

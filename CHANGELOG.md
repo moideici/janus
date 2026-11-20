@@ -8,10 +8,21 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), et les 
 - **Spécification normative en anglais** (`spec/janus-v1.md`), autonome : elle suffit pour écrire une autre implémentation.
 - **Quatre clients indépendants** (`clients/`) en Python, TypeScript, C# et Java, écrits à partir de la spécification seule, sans aucun téléchargement. Ils ouvrent tous les vecteurs, et les cinq implémentations s'ouvrent mutuellement leurs fichiers (`clients/interop.py`, 75 combinaisons sur 75). Ce sont des clients d'interopérabilité, pas en temps constant.
 - Intégration continue : tests des quatre clients et interopérabilité croisée.
+- **Durcissement** ([docs/08](docs/08-durcissement.md)) :
+  - `#![deny(unsafe_code)]`, sauf un petit module (`memoire.rs`) d'appels système ;
+  - identité et mots de passe verrouillés en mémoire vive (`mlock`, `VirtualLock`) ; pas de fichier core ; sous Linux, processus non lisible par ptrace ;
+  - fuzzing guidé par la couverture (cargo-fuzz, six cibles), chaque nuit en CI ;
+  - cargo-deny en CI : failles connues, licences, provenance des dépendances ;
+  - rustc épinglé et chemins neutralisés : le binaire Linux est reproductible, vérifié en CI ;
+  - attestations de provenance Sigstore sur chaque fichier de release.
 - **Entrée et sortie standard (`-`)** pour `chiffrer` et `dechiffrer`. `dechiffrer … -` ouvre **en mémoire** : rien n'est écrit avant que tout soit vérifié, et aucun fichier en clair n'est créé sur le disque.
 - **`janus modifier`** : rechiffre un fichier à plusieurs visages en exigeant l'identifiant de chacun, pour n'en perdre aucun, et avertit si le leurre ne change pas.
 - La bibliothèque accepte une **liste** de visages cachés (`chiffrer_flux`), et `dechiffrer_visage` indique si le visage ouvert est le leurre.
 - Tests de la ligne de commande (`tests/cli.rs`).
+
+### Corrigé
+- En lisant l'entrée standard, ou en ouvrant un fichier en mémoire (`dechiffrer … -`), le tampon grandissait par réallocations : chaque ancienne copie du clair était libérée **sans être effacée**. Le tampon est désormais alloué une fois, ou agrandi en effaçant l'ancien.
+- Les secrets partagés intermédiaires d'ML-KEM et l'aléa de Kemeleon sont maintenant effacés après usage.
 
 ### Modifié (format : les fichiers de la v0.1.0-alpha ne s'ouvrent plus)
 - **Format v1 candidat au gel.** Toutes les questions de format sont tranchées (tableau dans `docs/07-plan-release.md`). Aucun changement n'est plus prévu, sauf faille trouvée par une relecture ou un audit ; gel définitif en v1.0.

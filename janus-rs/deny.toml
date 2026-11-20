@@ -1,0 +1,40 @@
+# cargo-deny : contrôle de la chaîne d'approvisionnement, à chaque poussée (CI).
+#   cargo deny check        depuis janus-rs/
+#
+# - advisories : aucune dépendance avec une faille connue (base RustSec), ni
+#   abandonnée ou retirée de crates.io ;
+# - licenses : seulement des licences compatibles avec la MIT de Janus ;
+# - bans : pas de version « * » ; les doublons de version sont signalés ;
+# - sources : crates.io uniquement, aucun dépôt git ni registre inconnu.
+
+[graph]
+all-features = false
+
+[advisories]
+version = 2
+yanked = "deny"
+ignore = []
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "CC0-1.0",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

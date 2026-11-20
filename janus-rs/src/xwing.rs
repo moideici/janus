@@ -8,6 +8,7 @@
 //!
 //! La décapsulation est la fonction X-Wing standard appliquée après décodage.
 
+use crate::memoire::Verrou;
 use crate::{alea, elligator, kemeleon};
 use curve25519_elligator2::{EdwardsPoint, MapToPointVariant, MontgomeryPoint, Randomized, Scalar};
 use ml_kem::kem::{Decapsulate, KeyExport};
@@ -21,11 +22,18 @@ pub const TAILLE_PK: usize = 1216;
 pub const TAILLE_PK_M: usize = 1184;
 pub const XWING_LABEL: &[u8; 6] = b"\\.//^\\";
 
-pub struct Identite {
+/// Les secrets d'une identité, dans une allocation à eux, verrouillée en mémoire.
+struct Secrets {
     graine: Zeroizing<[u8; 32]>,
     dk_m: DecapsulationKey768,
     sk_x: Zeroizing<[u8; 32]>,
+}
+
+pub struct Identite {
+    // Ordre de destruction : les secrets sont effacés, puis leurs pages déverrouillées.
+    s: Box<Secrets>,
     pk: [u8; TAILLE_PK],
+    _verrou: Verrou,
 }
 
 impl Identite {
@@ -47,11 +55,13 @@ impl Identite {
         let mut pk = [0u8; TAILLE_PK];
         pk[..TAILLE_PK_M].copy_from_slice(&dk_m.encapsulation_key().to_bytes());
         pk[TAILLE_PK_M..].copy_from_slice(&pk_x);
-        Identite { graine: Zeroizing::new(*graine), dk_m, sk_x, pk }
+        let s = Box::new(Secrets { graine: Zeroizing::new(*graine), dk_m, sk_x });
+        let verrou = Verrou::sur(&*s);
+        Identite { s, pk, _verrou: verrou }
     }
 
     pub fn graine(&self) -> &[u8; 32] {
-        &self.graine
+        &self.s.graine
     }
 
     pub fn cle_publique(&self) -> &[u8; TAILLE_PK] {
@@ -60,22 +70,22 @@ impl Identite {
 
     /// Décapsulation standard (ct = ct_M ‖ ct_X).
     pub fn decapsuler(&self, ct_m: &[u8], ct_x: &[u8; 32]) -> Zeroizing<[u8; 32]> {
-        let ss_m = self.dk_m.decapsulate_slice(ct_m).expect("1088 octets");
-        let ss_x = Zeroizing::new(MontgomeryPoint(*ct_x).mul_clamped(*self.sk_x).to_bytes());
-        combiner(&ss_m, &ss_x[..], ct_x, &self.pk[TAILLE_PK_M..])
+        let ss_m = Zeroizing::new(<[u8; 32]>::from(self.s.dk_m.decapsulate_slice(ct_m).expect("1088 octets")));
+        let ss_x = Zeroizing::new(MontgomeryPoint(*ct_x).mul_clamped(*self.s.sk_x).to_bytes());
+        combiner(&ss_m[..], &ss_x[..], ct_x, &self.pk[TAILLE_PK_M..])
     }
 
     /// Décapsulation d'un emplacement Janus : représentant Elligator ‖ κ masqué.
     /// Ordre : ct_X, puis ss_X, puis démasquage de κ, puis Kemeleon et ML-KEM.
     pub fn decapsuler_cache(&self, r: &[u8; 32], kappa_masque: &[u8]) -> Zeroizing<[u8; 32]> {
         let ct_x = elligator_vers_point(r);
-        let ss_x = Zeroizing::new(MontgomeryPoint(ct_x).mul_clamped(*self.sk_x).to_bytes());
+        let ss_x = Zeroizing::new(MontgomeryPoint(ct_x).mul_clamped(*self.s.sk_x).to_bytes());
         let mut kappa = [0u8; kemeleon::TAILLE_ENCODEE];
         kappa.copy_from_slice(kappa_masque);
         masquer(&mut kappa, &ss_x, &ct_x);
         let ct_m = kemeleon::decoder_chiffre(&kappa);
-        let ss_m = self.dk_m.decapsulate_slice(&ct_m).expect("1088 octets");
-        combiner(&ss_m, &ss_x[..], &ct_x, &self.pk[TAILLE_PK_M..])
+        let ss_m = Zeroizing::new(<[u8; 32]>::from(self.s.dk_m.decapsulate_slice(&ct_m).expect("1088 octets")));
+        combiner(&ss_m[..], &ss_x[..], &ct_x, &self.pk[TAILLE_PK_M..])
     }
 }
 
@@ -145,8 +155,9 @@ pub fn encapsuler_cache(pk: &[u8; TAILLE_PK]) -> Option<EncapsulationCachee> {
     let mut m = ml_kem::B32::try_from(&alea::octets::<32>()[..]).unwrap();
     let (ct_m, ss_m) = ek_m.encapsulate_deterministic(&m);
     m.as_mut_slice().zeroize();
+    let ss_m = Zeroizing::new(<[u8; 32]>::from(ss_m));
 
-    let ss = combiner(&ss_m, &ss_x[..], &ct_x, &pk_x);
+    let ss = combiner(&ss_m[..], &ss_x[..], &ct_x, &pk_x);
     let mut kappa = kemeleon::encoder_chiffre(&ct_m);
     masquer(&mut kappa, &ss_x, &ct_x);
     Some((ss, r, kappa))
@@ -271,7 +282,7 @@ mod tests {
         let ct_x = elligator_vers_point(&r);
         assert_ne!(*id.decapsuler(&kemeleon::decoder_chiffre(&kappa_masque), &ct_x), *ss);
         // Avec ss_X, on démasque, et tout redevient cohérent.
-        let ss_x = MontgomeryPoint(ct_x).mul_clamped(*id.sk_x).to_bytes();
+        let ss_x = MontgomeryPoint(ct_x).mul_clamped(*id.s.sk_x).to_bytes();
         let mut kappa = kappa_masque;
         masquer(&mut kappa, &ss_x, &ct_x);
         assert_eq!(*id.decapsuler(&kemeleon::decoder_chiffre(&kappa), &ct_x), *ss);

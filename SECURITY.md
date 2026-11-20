@@ -3,11 +3,19 @@
 ## Statut
 
 Janus est un **prototype de recherche** :
-- son format n'est pas figé ;
+- son format est candidat au gel, mais pas définitivement gelé ;
 - son code n'a eu aucun audit externe ;
 - ses preuves de sécurité n'ont été relues par personne.
 
 **Ne l'utilise pas pour de vrais secrets.** Toutes les versions 0.x sont des aperçus, et seule la dernière reçoit des correctifs.
+
+## Vérifier un binaire
+
+Les releases à partir de la v0.2.0-alpha portent une attestation de provenance Sigstore, et le binaire Linux est reproductible ([docs/08](docs/08-durcissement.md), § 5) :
+
+```bash
+gh attestation verify <archive> --repo moideici/janus
+```
 
 ## Signaler une faille
 

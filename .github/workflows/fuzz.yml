@@ -1,0 +1,57 @@
+# Fuzzing guidé par la couverture (cargo-fuzz, libFuzzer, AddressSanitizer), chaque
+# nuit et à la demande. Le corpus est conservé d'un passage à l'autre (cache), si
+# bien que le fuzzing reprend là où il s'était arrêté. Un plantage fait échouer la
+# tâche, et l'entrée fautive est jointe à l'exécution (artefact).
+name: Fuzzing
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "Durée par cible, en minutes"
+        default: "10"
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: Fuzzing (${{ matrix.cible }})
+    strategy:
+      fail-fast: false
+      matrix:
+        cible: [ouvrir_cle, muter, cles_texte, kemeleon, elligator, inspect]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: janus-rs
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Nightly et cargo-fuzz
+        run: |
+          rustup toolchain install nightly --profile minimal
+          cargo install cargo-fuzz --locked --version 0.13.2
+
+      - uses: actions/cache@v4
+        with:
+          path: janus-rs/fuzz/corpus/${{ matrix.cible }}
+          key: corpus-${{ matrix.cible }}-${{ github.run_id }}
+          restore-keys: corpus-${{ matrix.cible }}-
+
+      - name: Fuzzing
+        run: |
+          minutes="${{ github.event.inputs.minutes || '10' }}"
+          mkdir -p fuzz/corpus/${{ matrix.cible }}
+          graines=""; longueur=4096
+          if [ "${{ matrix.cible }}" = ouvrir_cle ]; then graines="vecteurs"; longueur=200000; fi
+          cargo +nightly fuzz run -O ${{ matrix.cible }} fuzz/corpus/${{ matrix.cible }} $graines -- \
+            -max_total_time=$((minutes * 60)) -max_len=$longueur -print_final_stats=1
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: plantage-${{ matrix.cible }}
+          path: janus-rs/fuzz/artifacts/${{ matrix.cible }}/

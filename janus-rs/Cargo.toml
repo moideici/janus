@@ -40,6 +40,10 @@ path = "src/lib.rs"
 name = "janus"
 path = "src/main.rs"
 
+[lints.rust]
+# cfg(fuzzing) est posé par cargo-fuzz (voir fuzz/).
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
+
 [profile.release]
 codegen-units = 1
 lto = "thin"

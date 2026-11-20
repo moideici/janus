@@ -25,11 +25,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Rust stable et clippy
+      - name: Rust (version épinglée par rust-toolchain.toml)
         run: |
-          rustup update stable --no-self-update
-          rustup default stable
-          rustup component add clippy
+          rustup toolchain install
           rustc --version
 
       - uses: actions/cache@v4
@@ -43,6 +41,12 @@ jobs:
       - name: Clippy
         run: cargo clippy --release --locked --all-targets -- -D warnings
 
+      - name: Les cibles de fuzzing compilent
+        if: runner.os == 'Linux'
+        run: |
+          rustup toolchain install nightly --profile minimal
+          cargo +nightly check --manifest-path fuzz/Cargo.toml --locked
+
       - name: Tests
         run: cargo test --release --locked
 
@@ -54,10 +58,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Rust stable
-        run: |
-          rustup update stable --no-self-update
-          rustup default stable
+      - name: Rust (version épinglée)
+        working-directory: janus-rs
+        run: rustup toolchain install
 
       - uses: actions/cache@v4
         with:
@@ -101,3 +104,36 @@ jobs:
 
       - name: Interopérabilité croisée
         run: python clients/interop.py
+
+  dependances:
+    # Chaîne d'approvisionnement : failles connues (RustSec), licences, provenance.
+    name: Dépendances (cargo-deny)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: janus-rs/Cargo.toml
+
+  reproductible:
+    # Deux compilations, depuis deux dossiers différents, doivent donner un binaire
+    # identique octet pour octet (docs/08-durcissement.md).
+    name: Build reproductible (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: a
+      - name: Rust (version épinglée)
+        working-directory: a/janus-rs
+        run: rustup toolchain install
+      - name: Deux compilations
+        run: |
+          cp -r a /tmp/b
+          for d in "$PWD/a" /tmp/b; do
+            (cd "$d/janus-rs" && RUSTFLAGS="--remap-path-prefix=$d=/janus --remap-path-prefix=$HOME/.cargo=/cargo" \
+              cargo build --release --locked --quiet)
+          done
+          sha256sum a/janus-rs/target/release/janus /tmp/b/janus-rs/target/release/janus
+          cmp a/janus-rs/target/release/janus /tmp/b/janus-rs/target/release/janus
+          echo "Binaire reproductible."

@@ -1,0 +1,66 @@
+# Fuzzing guidé par la couverture (cargo-fuzz, libFuzzer). Chaîne nightly requise :
+#   cargo +nightly fuzz run <cible>          depuis janus-rs/
+# Voir fuzz/README.md.
+[package]
+name = "janus-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+license = "MIT"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+janus-rs = { path = ".." }
+curve25519-elligator2 = "0.1.0-alpha.2"
+
+# Paquet indépendant : il ne fait pas partie d'un espace de travail parent.
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "ouvrir_cle"
+path = "fuzz_targets/ouvrir_cle.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "muter"
+path = "fuzz_targets/muter.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "cles_texte"
+path = "fuzz_targets/cles_texte.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "kemeleon"
+path = "fuzz_targets/kemeleon.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "elligator"
+path = "fuzz_targets/elligator.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "inspect"
+path = "fuzz_targets/inspect.rs"
+test = false
+doc = false
+bench = false
