@@ -33,7 +33,9 @@ cargo build --release
 
 | Dossier | Contenu |
 |---|---|
-| [`janus-rs/`](janus-rs/README.md) | Le prototype en Rust : bibliothèque, ligne de commande `janus`, 66 tests, vecteurs de test, banc d'essai, test de temps constant (dudect) |
+| [`janus-rs/`](janus-rs/README.md) | Le prototype en Rust : bibliothèque, ligne de commande `janus`, 67 tests, vecteurs de test, banc d'essai, test de temps constant (dudect) |
+| [`spec/janus-v1.md`](spec/janus-v1.md) | **La spécification normative du format, en anglais** : tout ce qu'il faut pour écrire une autre implémentation |
+| [`clients/`](clients/README.md) | Quatre implémentations indépendantes écrites à partir de la spécification seule (Python, TypeScript, C#, Java), et le test d'interopérabilité croisée |
 | [`docs/`](docs/) | La conception et les preuves, de la cartographie au plan de release (voir ci-dessous) |
 
 ### Documents
@@ -51,6 +53,7 @@ cargo build --release
 ## Ce qui est vérifié
 
 - **Conformité :** le vecteur de test officiel d'X-Wing (draft-11) est reproduit, et Kemeleon est comparé à une implémentation de référence.
+- **Spécification complète :** quatre clients écrits à partir de [la spécification](spec/janus-v1.md) seule, sans lire le code Rust, ouvrent tous les vecteurs de test. Chacune des cinq implémentations ouvre les fichiers de toutes les autres (75 combinaisons sur 75, vérifiées par l'intégration continue).
 - **Discrétion :** les fichiers passent le test du χ², alors que les chiffrés ML-KEM bruts sont détectés. L'éphémère X25519 est uniforme, même face à un adversaire capable de calculer des logarithmes discrets.
 - **Déni :** ce que voit l'adversaire contraint suit la même loi avec ou sans secret (test d'homogénéité, p = 0,58 en mélangeant des fichiers à 1 et à 3 visages cachés).
 - **Temps constant :** dudect ne détecte aucune fuite sur Kemeleon, Elligator, la décapsulation ou l'ouverture. Le test lui-même sait repérer une fuite : il la détecte sur un témoin volontairement vulnérable.

@@ -5,6 +5,9 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), et les 
 ## [Non publié]
 
 ### Ajouté
+- **Spécification normative en anglais** (`spec/janus-v1.md`), autonome : elle suffit pour écrire une autre implémentation.
+- **Quatre clients indépendants** (`clients/`) en Python, TypeScript, C# et Java, écrits à partir de la spécification seule, sans aucun téléchargement. Ils ouvrent tous les vecteurs, et les cinq implémentations s'ouvrent mutuellement leurs fichiers (`clients/interop.py`, 75 combinaisons sur 75). Ce sont des clients d'interopérabilité, pas en temps constant.
+- Intégration continue : tests des quatre clients et interopérabilité croisée.
 - **Entrée et sortie standard (`-`)** pour `chiffrer` et `dechiffrer`. `dechiffrer … -` ouvre **en mémoire** : rien n'est écrit avant que tout soit vérifié, et aucun fichier en clair n'est créé sur le disque.
 - **`janus modifier`** : rechiffre un fichier à plusieurs visages en exigeant l'identifiant de chacun, pour n'en perdre aucun, et avertit si le leurre ne change pas.
 - La bibliothèque accepte une **liste** de visages cachés (`chiffrer_flux`), et `dechiffrer_visage` indique si le visage ouvert est le leurre.
@@ -14,6 +17,8 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), et les 
 - **Format v1 candidat au gel.** Toutes les questions de format sont tranchées (tableau dans `docs/07-plan-release.md`). Aucun changement n'est plus prévu, sauf faille trouvée par une relecture ou un audit ; gel définitif en v1.0.
 - **Q7 : clés en Bech32m**, comme age. Identité `JANUS-SECRET-KEY-1…` (76 caractères, majuscules), clé publique `janus1…` (minuscules). Nouveaux vecteurs `vecteurs/cles.json`. Les fichiers d'identité de l'aperçu (`JANUS-SECRET-V0-…`) restent lisibles : la paire de clés ne change pas, seul son texte change. Les anciennes clés publiques `janus-pub-v0-…` ne sont plus acceptées ; `janus publique moi.cle` donne la nouvelle.
 - **QI-1 : pas d'étiquette sur tout le corps** en v1 (document 06, § 6).
+- Une clé publique dont la partie X25519 n'est pas canonique est refusée (elle n'est jamais produite par la génération de clés, et le destinataire n'aurait pas pu ouvrir le fichier). Une même clé répétée dans un visage est refusée.
+- `janus cles --help` affichait l'aide… après avoir créé un fichier nommé `--help` : corrigé, et `--help` est reconnu après n'importe quelle commande.
 - **QB-3 : 4 étiquettes d'en-tête au lieu de 2.** Un fichier contient un leurre et jusqu'à **3 visages cachés**, qui se partagent la réserve. Avoir livré deux identifiants ne prouve plus qu'on a tout livré. L'en-tête passe de 26 208 à 26 272 octets. Les vecteurs de test sont régénérés, avec un nouveau fichier `quatre-visages.janus`.
 - `chiffrer` accepte jusqu'à trois `--cache`, et `modifier` autant d'identifiants cachés.
 - Engagement : au plus 4 clés par fichier ; oracle de partition : au plus 4 mots de passe testés par ouverture (documents 05 et 06).

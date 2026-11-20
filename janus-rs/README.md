@@ -11,7 +11,7 @@ Toutes se lancent depuis `janus-rs/`.
 | Action | Commande |
 |---|---|
 | Compiler | `cargo build --release` |
-| Lancer les 66 tests | `cargo test --release` |
+| Lancer les 67 tests | `cargo test --release` |
 | Banc d'essai | `cargo run --release --example banc` |
 | Test de temps constant | `cargo run --release --example dudect` |
 | Longue campagne de fuzzing | `JANUS_FUZZ_ITER=100000 cargo test --release --test fuzz -- --nocapture` |

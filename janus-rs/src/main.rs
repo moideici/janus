@@ -407,11 +407,11 @@ fn executer(args: &[String]) -> Result<(), String> {
             println!("{}", version());
             Ok(())
         }
-        Some("--help" | "-h" | "aide") => {
+        _ if args.iter().any(|a| a == "--help" || a == "-h") || args.first().is_some_and(|a| a == "aide") => {
             println!("{}\n{AVERTISSEMENT}\n\n{AIDE}", version());
             Ok(())
         }
-        Some("cles") if args.len() == 2 => {
+        Some("cles") if args.len() == 2 && !args[1].starts_with('-') => {
             let id = Identite::generer();
             let pub_txt = cles::publique_vers_texte(id.cle_publique());
             let contenu = Zeroizing::new(format!(

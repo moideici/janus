@@ -9,3 +9,7 @@ janus-rs/target/
 
 # Cours de cryptographie : gardé en local, hors du dépôt
 cours/
+__pycache__/
+clients/java/out/
+clients/csharp/**/bin/
+clients/csharp/**/obj/

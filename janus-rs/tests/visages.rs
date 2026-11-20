@@ -96,6 +96,9 @@ fn regles_r3_et_r5() {
     assert!(matches!(r, Err(ErreurChiffrement::MemeCle)));
     let r = format::chiffrer_deux_visages(b"a", Destinataires::Cles(&[pk(0)]), b"b", Destinataires::Cles(&[]));
     assert!(matches!(r, Err(ErreurChiffrement::AucunDestinataire)));
+    // R5 : une même clé répétée dans un seul visage est refusée aussi.
+    let r = format::chiffrer(b"a", Destinataires::Cles(&[pk(0), pk(2), pk(0)]));
+    assert!(matches!(r, Err(ErreurChiffrement::MemeCle)));
     // R3 : 16 destinataires au total.
     let pks: Vec<_> = (0..17).map(|_| *Identite::generer().cle_publique()).collect();
     let r = format::chiffrer_deux_visages(b"a", Destinataires::Cles(&pks[..10]), b"b", Destinataires::Cles(&pks[10..17]));

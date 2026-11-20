@@ -258,7 +258,7 @@ impl std::fmt::Display for ErreurChiffrement {
             ),
             Self::TropDeVisages => write!(f, "{MAX_CACHES} visage(s) caché(s) au plus"),
             Self::MemeMotDePasse => f.write_str("deux visages ne doivent pas avoir le même mot de passe"),
-            Self::MemeCle => f.write_str("une même clé publique ne doit pas ouvrir deux visages"),
+            Self::MemeCle => f.write_str("une même clé publique ne doit apparaître qu'une fois dans le fichier"),
             Self::Io(e) => write!(f, "erreur d'entrée-sortie : {e}"),
         }
     }
@@ -422,7 +422,13 @@ fn verifier_regles(visages: &[Description]) -> Result<(), ErreurChiffrement> {
         total += match v.dest {
             Destinataires::MotDePasse(_) => 1,
             Destinataires::Cles([]) => return Err(ErreurChiffrement::AucunDestinataire),
-            Destinataires::Cles(c) => c.len(),
+            Destinataires::Cles(c) => {
+                // Une clé répétée dans un même visage n'apporte rien (spec, R5).
+                if c.iter().enumerate().any(|(n, k)| c[n + 1..].contains(k)) {
+                    return Err(ErreurChiffrement::MemeCle);
+                }
+                c.len()
+            }
         };
     }
     if total > N_EMPL {

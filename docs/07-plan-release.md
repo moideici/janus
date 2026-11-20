@@ -18,7 +18,7 @@ Une release invite d'autres personnes à utiliser l'outil, et à garder des fich
    - une politique de signalement des failles (`SECURITY.md`) ;
    - des binaires produits par l'intégration continue.
 
-Aucune de ces raisons n'est une faiblesse cryptographique connue. Les preuves (documents 04 à 06) et les tests (66, dont 50 000 puis, après QB-3, 30 000 mutations de fuzzing) sont en place. Ce qui manque relève de la stabilité et de l'outillage.
+Aucune de ces raisons n'est une faiblesse cryptographique connue. Les preuves (documents 04 à 06) et les tests (67, dont 50 000 puis, après QB-3, 30 000 mutations de fuzzing) sont en place. Ce qui manque relève de la stabilité et de l'outillage.
 
 ## Gel du format v1 (19 novembre 2026)
 
@@ -36,6 +36,8 @@ Toutes les questions de format sont tranchées. Le format v1 est **candidat au g
 | Q6 Argon2id | 64 Mio, t = 3, p = 4 | 02, § 3.2 |
 | Q7 Encodage des clés | Bech32m, préfixes `janus` et `JANUS-SECRET-KEY-` | 02, § 3.1 |
 | Q10 Ordre des octets de Kemeleon | Gros-boutiste | 02, § 12 |
+
+**Spécification et implémentations indépendantes (20 novembre 2026).** Le format est décrit en anglais dans [`spec/janus-v1.md`](../spec/janus-v1.md). Quatre clients (Python, TypeScript, C#, Java) ont été écrits à partir de ce seul texte : tous ouvrent les vecteurs de test, et les cinq implémentations s'ouvrent mutuellement leurs fichiers. Leurs retours ont servi à préciser la spécification (vecteur X-Wing complet, décodage de `pk_X`, règles R1 à R5 au complet, fichiers de clés).
 
 Restent ouvertes des questions de **preuve**, pas de format : IND-CCA du point sale (Q2), fuite exacte du bourrage (Q4), vérification par machine, modèle quantique de l'oracle aléatoire.
 

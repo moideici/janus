@@ -1,0 +1,16 @@
+{
+  "name": "janus-typescript",
+  "version": "0.1.0",
+  "description": "Independent TypeScript implementation of the Janus v1 file format (interoperability client, not audited)",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.7"
+  },
+  "bin": {
+    "janus-ts": "janus.ts"
+  },
+  "scripts": {
+    "test": "node --test test.ts"
+  }
+}

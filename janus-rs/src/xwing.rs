@@ -96,8 +96,21 @@ fn cle_ml_kem(pk: &[u8; TAILLE_PK]) -> Option<EncapsulationKey768> {
 }
 
 /// Valide une clé publique (la partie ML-KEM doit être bien formée).
+/// Valide une clé publique : partie ML-KEM bien formée (FIPS 203), et pk_X canonique
+/// (bit 255 nul, valeur < p). Un pk_X non canonique n'est jamais produit par la
+/// génération de clés, et le destinataire, qui combine son pk_X canonique, ne
+/// pourrait pas ouvrir le fichier (spec, § 3.1).
 pub fn cle_publique_valide(pk: &[u8; TAILLE_PK]) -> bool {
-    cle_ml_kem(pk).is_some()
+    cle_ml_kem(pk).is_some() && x_canonique(pk[TAILLE_PK_M..].try_into().unwrap())
+}
+
+/// Vrai si les 32 octets petit-boutistes valent moins que p = 2^255 − 19.
+fn x_canonique(x: &[u8; 32]) -> bool {
+    // p = ed ff … ff 7f (petit-boutiste) : x < p ⇔ x ≠ p..2^256−1.
+    let mut p = [0xffu8; 32];
+    p[0] = 0xed;
+    p[31] = 0x7f;
+    x.iter().rev().zip(p.iter().rev()).find(|(a, b)| a != b).is_some_and(|(a, b)| a < b)
 }
 
 /// X-Wing EncapsulateDerand standard : sert au vecteur de test officiel.
@@ -263,6 +276,21 @@ mod tests {
         masquer(&mut kappa, &ss_x, &ct_x);
         assert_eq!(*id.decapsuler(&kemeleon::decoder_chiffre(&kappa), &ct_x), *ss);
         assert_eq!(*id.decapsuler_cache(&r, &kappa_masque), *ss);
+    }
+
+    #[test]
+    fn pk_x_non_canonique_refuse() {
+        let id = Identite::generer();
+        assert!(cle_publique_valide(id.cle_publique()));
+        let mut pk = *id.cle_publique();
+        pk[TAILLE_PK - 1] |= 0x80; // bit 255
+        assert!(!cle_publique_valide(&pk));
+        let mut pk = *id.cle_publique();
+        pk[TAILLE_PK_M..].copy_from_slice(&[0xff; 32]);
+        pk[TAILLE_PK - 1] = 0x7f; // 2^255 − 1 ≥ p
+        assert!(!cle_publique_valide(&pk));
+        pk[TAILLE_PK_M] = 0xec; // p − 1 : canonique
+        assert!(cle_publique_valide(&pk));
     }
 
     /// Les 8 points d'ordre faible sont tous atteints, et rien d'autre.
