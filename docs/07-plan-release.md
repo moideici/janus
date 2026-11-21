@@ -60,7 +60,7 @@ Une **pré-release** GitHub, marquée comme telle, pour essayer Janus et le crit
 
 ### v0.2.0-alpha : stabiliser ce qui touche l'utilisateur
 
-*Publiée le 21 novembre 2026* ([notes de version](notes-de-version/v0.2.0-alpha.md)), avec en plus la spécification en anglais, quatre clients indépendants, le durcissement et les preuves renforcées. Restent de cette étape : la batterie NIST STS et la comparaison avec age.
+*Publiée le 21 novembre 2026* ([notes de version](notes-de-version/v0.2.0-alpha.md)), avec en plus la spécification en anglais, quatre clients indépendants, le durcissement et les preuves renforcées. *Le 21 novembre 2026, les deux restes de cette étape sont faits* ([10-evaluation.md](10-evaluation.md)) : comparaison avec age, et batterie NIST STS passée en entier.
 
 - ~~**Figer l'encodage texte des clés** (Q7)~~ **Fait** : Bech32m, préfixes `janus` et `JANUS-SECRET-KEY-`, vecteurs dans `janus-rs/vecteurs/cles.json`.
 - **Lire l'entrée standard et écrire sur la sortie standard**, pour chiffrer dans un tube.

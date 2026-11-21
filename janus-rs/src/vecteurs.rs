@@ -27,7 +27,15 @@ enum Dest {
     /// Leurre ouvert par MDP, puis des visages cachés : (mot de passe, longueur).
     /// Le j-ième secret vaut octet k = (17·k + 3 + 50·j) mod 256.
     Visages(&'static [(&'static str, usize)]),
+    /// Leurre pour les clés 0 et 1 ; visage caché 0 pour la clé 2 (500 octets) ;
+    /// visage caché 1 pour le mot de passe « visage » (300 octets). Ouvrir avec les
+    /// identités 0 et 2 ensemble doit donner « plusieurs visages ».
+    VisagesCles,
 }
+
+/// Configuration de `Dest::VisagesCles`.
+const VC_CACHE_CLE: (u8, usize) = (2, 500);
+const VC_CACHE_MDP: (&str, usize) = ("visage", 300);
 
 struct Cas {
     nom: &'static str,
@@ -48,6 +56,7 @@ const CAS: &[Cas] = &[
         dest: Dest::Visages(&[("visage", 700), ("deuxieme", 300), ("troisieme", 200)]),
         longueur: 1000,
     },
+    Cas { nom: "visages-cles", dest: Dest::VisagesCles, longueur: 1000 },
 ];
 
 /// Clair de longueur n : octet k = (31·k + 7) mod 256.
@@ -101,6 +110,26 @@ fn generer(cas: &Cas) -> Vec<u8> {
             let pks: Vec<_> = (0..n).map(|i| *Identite::depuis_graine(&graine(i)).cle_publique()).collect();
             format::chiffrer(&m, Destinataires::Cles(&pks)).unwrap()
         }
+        Dest::VisagesCles => {
+            let pk = |i: u8| *Identite::depuis_graine(&graine(i)).cle_publique();
+            let pks_leurre = [pk(0), pk(1)];
+            let pks_cache = [pk(VC_CACHE_CLE.0)];
+            let (s0, s1) = (clair_secret(0, VC_CACHE_CLE.1), clair_secret(1, VC_CACHE_MDP.1));
+            let (mut l0, mut l1) = (&s0[..], &s1[..]);
+            let visages = vec![
+                format::Visage { entree: &mut l0, longueur: s0.len() as u64, dest: Destinataires::Cles(&pks_cache) },
+                format::Visage {
+                    entree: &mut l1,
+                    longueur: s1.len() as u64,
+                    dest: Destinataires::MotDePasse(VC_CACHE_MDP.0.as_bytes()),
+                },
+            ];
+            let principal =
+                format::Visage { entree: &mut &m[..], longueur: m.len() as u64, dest: Destinataires::Cles(&pks_leurre) };
+            let mut v = Vec::new();
+            format::chiffrer_flux(principal, visages, &mut v).unwrap();
+            v
+        }
     })
 }
 
@@ -134,6 +163,23 @@ fn manifeste(fichiers: &[(&Cas, Vec<u8>)]) -> String {
             Dest::Cles(k) => {
                 let g: Vec<String> = (0..k).map(|i| format!("\"{}\"", hex::encode(graine(i)))).collect();
                 format!("{{ \"type\": \"identites\", \"chacune_ouvre\": [{}] }}", g.join(", "))
+            }
+            Dest::VisagesCles => {
+                let (i, n0) = VC_CACHE_CLE;
+                let (mdp, n1) = VC_CACHE_MDP;
+                format!(
+                    "{{ \"type\": \"identites\", \"chacune_ouvre\": [\"{}\", \"{}\"], \"visages_caches\": [\
+                     {{ \"identite\": \"{}\", \"clair\": \"octet k = (17*k + 3 + 50*0) mod 256\", \"clair_longueur\": {n0}, \"sha256_clair\": \"{}\" }}, \
+                     {{ \"mot_de_passe\": \"{mdp}\", \"clair\": \"octet k = (17*k + 3 + 50*1) mod 256\", \"clair_longueur\": {n1}, \"sha256_clair\": \"{}\" }}], \
+                     \"plusieurs_visages\": [\"{}\", \"{}\"] }}",
+                    hex::encode(graine(0)),
+                    hex::encode(graine(1)),
+                    hex::encode(graine(i)),
+                    hex_sha256(&clair_secret(0, n0)),
+                    hex_sha256(&clair_secret(1, n1)),
+                    hex::encode(graine(0)),
+                    hex::encode(graine(i)),
+                )
             }
         };
         let m = clair(cas.longueur);
@@ -199,6 +245,24 @@ fn vecteurs_reproductibles_et_ouvrables() {
                 }
                 let etranger = [Identite::depuis_graine(&[0xEE; 32])];
                 assert!(format::dechiffrer(&publie, Ouverture::Identites(&etranger)).is_err());
+            }
+            Dest::VisagesCles => {
+                for i in [0, 1] {
+                    let id = [Identite::depuis_graine(&graine(i))];
+                    let (c, principal) = format::dechiffrer_visage(&publie, Ouverture::Identites(&id)).unwrap();
+                    assert!(principal && *c == attendu[..], "{} : leurre, destinataire {i}", cas.nom);
+                }
+                let id = [Identite::depuis_graine(&graine(VC_CACHE_CLE.0))];
+                let (c, principal) = format::dechiffrer_visage(&publie, Ouverture::Identites(&id)).unwrap();
+                assert!(!principal && *c == clair_secret(0, VC_CACHE_CLE.1)[..], "{} : visage caché à clé", cas.nom);
+                let c = format::dechiffrer(&publie, Ouverture::MotDePasse(VC_CACHE_MDP.0.as_bytes())).unwrap();
+                assert_eq!(&*c, &clair_secret(1, VC_CACHE_MDP.1)[..], "{} : visage caché à mot de passe", cas.nom);
+                let deux = [Identite::depuis_graine(&graine(0)), Identite::depuis_graine(&graine(VC_CACHE_CLE.0))];
+                let r = format::dechiffrer_visage(&publie, Ouverture::Identites(&deux));
+                assert!(matches!(r, Err(format::ErreurOuverture::PlusieursVisages)), "{} : plusieurs visages", cas.nom);
+                let etranger = [Identite::depuis_graine(&[0xEE; 32])];
+                assert!(format::dechiffrer(&publie, Ouverture::Identites(&etranger)).is_err());
+                assert!(format::dechiffrer(&publie, Ouverture::MotDePasse(b"mauvais")).is_err());
             }
         }
     }

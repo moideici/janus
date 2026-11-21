@@ -398,41 +398,80 @@ public static class SelfTest
             var opening = v.GetProperty("ouverture");
             string expected = v.GetProperty("sha256_clair").GetString()!;
             int expectedLength = v.GetProperty("clair_longueur").GetInt32();
+            Identity IdentityFromHex(JsonElement e) => new(Convert.FromHexString(e.GetString()!));
+            bool Matches(byte[] p, JsonElement face) => p.Length == face.GetProperty("clair_longueur").GetInt32()
+                                                         && Sha256Hex(p) == face.GetProperty("sha256_clair").GetString();
 
-            if (opening.GetProperty("type").GetString() == "mot_de_passe")
+            // Every field must be understood: an unknown one is a failure, never silently skipped.
+            var openingFields = new HashSet<string> { "type", "valeur", "chacune_ouvre", "visages_caches", "plusieurs_visages" };
+            foreach (var field in opening.EnumerateObject())
+                if (!openingFields.Contains(field.Name)) Fail($"{name}: unknown field ouverture.{field.Name}");
+
+            string type = opening.GetProperty("type").GetString()!;
+            if (type == "mot_de_passe")
             {
                 var p = JanusFile.DecryptWithPassword(file, Encoding.UTF8.GetBytes(opening.GetProperty("valeur").GetString()!));
                 Check($"{name}: password opens the main face", p.Length == expectedLength && Sha256Hex(p) == expected);
-                if (opening.TryGetProperty("visages_caches", out var hidden))
-                {
-                    foreach (var h in hidden.EnumerateArray())
-                    {
-                        string pw = h.GetProperty("mot_de_passe").GetString()!;
-                        var hp = JanusFile.DecryptWithPassword(file, Encoding.UTF8.GetBytes(pw));
-                        Check($"{name}: hidden face \"{pw}\"", hp.Length == h.GetProperty("clair_longueur").GetInt32()
-                              && Sha256Hex(hp) == h.GetProperty("sha256_clair").GetString());
-                    }
-                }
-                Check($"{name}: wrong password fails",
-                      Throws<DecryptionException>(() => JanusFile.DecryptWithPassword(file, "wrong"u8)));
             }
-            else
+            else if (type == "identites")
             {
-                var ids = opening.GetProperty("chacune_ouvre").EnumerateArray()
-                                 .Select(s => new Identity(Convert.FromHexString(s.GetString()!))).ToList();
-                bool all = true;
+                var ids = opening.GetProperty("chacune_ouvre").EnumerateArray().Select(IdentityFromHex).ToList();
+                bool all = ids.Count > 0;
                 foreach (var id in ids)
                 {
                     var p = JanusFile.DecryptWithIdentities(file, [id]);
                     all &= p.Length == expectedLength && Sha256Hex(p) == expected;
                 }
-                Check($"{name}: each of the {ids.Count} identities opens it", all);
+                Check($"{name}: each of the {ids.Count} identities opens the main face", all);
                 if (ids.Count > 1 && !quick)
                 {
                     var p = JanusFile.DecryptWithIdentities(file, ids);
-                    Check($"{name}: all identities together open it once", Sha256Hex(p) == expected);
+                    Check($"{name}: all {ids.Count} identities together open it once", Sha256Hex(p) == expected);
                 }
             }
+            else
+            {
+                Fail($"{name}: unknown opening type \"{type}\"");
+            }
+
+            if (opening.TryGetProperty("visages_caches", out var hidden))
+            {
+                var hiddenFields = new HashSet<string> { "mot_de_passe", "identite", "clair", "clair_longueur", "sha256_clair" };
+                foreach (var h in hidden.EnumerateArray())
+                {
+                    foreach (var field in h.EnumerateObject())
+                        if (!hiddenFields.Contains(field.Name)) Fail($"{name}: unknown hidden-face field {field.Name}");
+                    bool byPassword = h.TryGetProperty("mot_de_passe", out var pw);
+                    bool byIdentity = h.TryGetProperty("identite", out var seed);
+                    if (byPassword == byIdentity)
+                    {
+                        Fail($"{name}: hidden face opened by neither or both of mot_de_passe and identite");
+                        continue;
+                    }
+                    if (byPassword)
+                    {
+                        var hp = JanusFile.DecryptWithPassword(file, Encoding.UTF8.GetBytes(pw.GetString()!));
+                        Check($"{name}: hidden face, password \"{pw.GetString()}\"", Matches(hp, h));
+                    }
+                    else
+                    {
+                        var hp = JanusFile.DecryptWithIdentities(file, [IdentityFromHex(seed)]);
+                        Check($"{name}: hidden face, identity {seed.GetString()![..8]}…", Matches(hp, h));
+                    }
+                }
+            }
+
+            if (opening.TryGetProperty("plusieurs_visages", out var several))
+            {
+                var ids = several.EnumerateArray().Select(IdentityFromHex).ToList();
+                bool severalError = false;
+                try { JanusFile.DecryptWithIdentities(file, ids); }
+                catch (DecryptionException e) { severalError = e.SeveralFaces; }
+                Check($"{name}: {ids.Count} identities of different faces together → \"several faces\"", severalError);
+            }
+
+            Check($"{name}: wrong password fails",
+                  Throws<DecryptionException>(() => JanusFile.DecryptWithPassword(file, "wrong"u8)));
             Check($"{name}: foreign identity fails",
                   Throws<DecryptionException>(() => JanusFile.DecryptWithIdentities(file, [foreign])));
         }

@@ -200,38 +200,66 @@ test('manifeste.json: every vector, every credential, every hidden face', () => 
   const t0 = performance.now();
   const doc = JSON.parse(readFileSync(join(VECTORS, 'manifeste.json'), 'utf8'));
   const foreign = identityFromSeed(new Uint8Array(32).fill(0xee));
-  let opened = 0;
+  // Every field must be known: a new kind of credential or check must make
+  // this test fail rather than be skipped silently.
+  const onlyKeys = (obj: object, allowed: string[], what: string) => {
+    for (const k of Object.keys(obj)) assert.ok(allowed.includes(k), `${what}: unknown field "${k}"`);
+  };
+  const seedId = (s: string) => identityFromSeed(fromHex(s));
+  onlyKeys(doc, ['format', 'clair', 'graines', 'vecteurs'], 'manifeste.json');
+  let opened = 0, several = 0;
   for (const v of doc.vecteurs) {
+    onlyKeys(v, ['nom', 'fichier', 'taille', 'sha256_fichier', 'ouverture', 'clair_longueur', 'sha256_clair'], v.nom);
     const file = readFileSync(join(VECTORS, v.fichier));
     assert.equal(file.length, v.taille, v.nom);
     assert.equal(hex(sha256(file)), v.sha256_fichier, v.nom);
-    const o = v.ouverture;
-    if (o.type === 'mot_de_passe') {
-      const out = decrypt(file, pw(o.valeur));
-      assert.equal(out.length, v.clair_longueur, v.nom);
-      assert.equal(hex(sha256(out)), v.sha256_clair, v.nom);
+    const checkMain = (out: Bytes, what: string) => {
+      assert.equal(out.length, v.clair_longueur, what);
+      assert.equal(hex(sha256(out)), v.sha256_clair, what);
+      assert.equal(hex(out), hex(mainPlain(v.clair_longueur)), what);
       opened++;
-      for (const [j, h] of (o.visages_caches ?? []).entries()) {
-        const hid = decrypt(file, pw(h.mot_de_passe));
-        assert.equal(hid.length, h.clair_longueur, `${v.nom} hidden ${j}`);
-        assert.equal(hex(sha256(hid)), h.sha256_clair, `${v.nom} hidden ${j}`);
-        const expected = Uint8Array.from({ length: h.clair_longueur }, (_, k) => (17 * k + 3 + 50 * j) % 256);
-        assert.equal(hex(hid), hex(expected));
-        opened++;
-      }
-      assertFails(file, pw('wrong password'));
+    };
+    const o = v.ouverture;
+    onlyKeys(o, ['type', 'valeur', 'chacune_ouvre', 'visages_caches', 'plusieurs_visages'], `${v.nom}.ouverture`);
+    if (o.type === 'mot_de_passe') {
+      assert.equal(typeof o.valeur, 'string', v.nom);
+      assert.equal(o.chacune_ouvre, undefined, v.nom);
+      checkMain(decrypt(file, pw(o.valeur)), `${v.nom} password`);
+    } else if (o.type === 'identites') {
+      assert.equal(o.valeur, undefined, v.nom);
+      assert.ok(Array.isArray(o.chacune_ouvre) && o.chacune_ouvre.length > 0, v.nom);
+      for (const s of o.chacune_ouvre) checkMain(decrypt(file, ids(seedId(s))), `${v.nom} ${s.slice(0, 2)}`);
+      checkMain(decrypt(file, ids(foreign, seedId(o.chacune_ouvre[0]))), `${v.nom} foreign + ${o.chacune_ouvre[0].slice(0, 2)}`);
     } else {
-      for (const s of o.chacune_ouvre) {
-        const out = decrypt(file, ids(identityFromSeed(fromHex(s))));
-        assert.equal(hex(sha256(out)), v.sha256_clair, `${v.nom} ${s.slice(0, 2)}`);
-        opened++;
-      }
-      assert.equal(hex(decrypt(file, ids(foreign, identityFromSeed(fromHex(o.chacune_ouvre[0]))))), hex(mainPlain(v.clair_longueur)));
-      assertFails(file, pw('janus'));
+      assert.fail(`${v.nom}: unknown ouverture.type "${o.type}"`);
     }
+
+    for (const [j, h] of (o.visages_caches ?? []).entries()) {
+      const what = `${v.nom} hidden ${j}`;
+      onlyKeys(h, ['mot_de_passe', 'identite', 'clair', 'clair_longueur', 'sha256_clair'], what);
+      let cred: Credentials;
+      if ('mot_de_passe' in h && !('identite' in h)) cred = pw(h.mot_de_passe);
+      else if ('identite' in h && !('mot_de_passe' in h)) cred = ids(seedId(h.identite));
+      else assert.fail(`${what}: needs exactly one of mot_de_passe, identite`);
+      const hid = decrypt(file, cred);
+      assert.equal(hid.length, h.clair_longueur, what);
+      assert.equal(hex(sha256(hid)), h.sha256_clair, what);
+      const expected = Uint8Array.from({ length: h.clair_longueur }, (_, k) => (17 * k + 3 + 50 * j) % 256);
+      assert.equal(hex(hid), hex(expected), what);
+      opened++;
+    }
+
+    if (o.plusieurs_visages !== undefined) {
+      assert.ok(Array.isArray(o.plusieurs_visages) && o.plusieurs_visages.length >= 2, `${v.nom}.plusieurs_visages`);
+      assertFails(file, ids(...o.plusieurs_visages.map(seedId)), SEVERAL_FACES);
+      several++;
+    }
+
+    assertFails(file, pw('wrong password'));
     assertFails(file, ids(foreign));
   }
-  console.log(`# vectors: ${opened} openings in ${(performance.now() - t0).toFixed(0)} ms`);
+  assert.ok(several > 0, 'no plusieurs_visages check in the manifest');
+  console.log(`# vectors: ${opened} openings, ${several} several-faces checks in ${(performance.now() - t0).toFixed(0)} ms`);
 });
 
 test('vectors: truncated or modified files fail', () => {

@@ -370,36 +370,73 @@ class TestReferenceVectors(unittest.TestCase):
             self.assertEqual(decode_identity(c["identite"]).seed, ident.seed)
             self.assertEqual(decode_public_key(c["cle_publique"]).raw, ident.public_key.raw)
 
+    # Every field of the manifest is handled explicitly: an unknown one fails the test
+    # instead of being silently skipped.
+    VECTOR_KEYS = {"nom", "fichier", "taille", "sha256_fichier", "ouverture", "clair_longueur", "sha256_clair"}
+    OPENING_KEYS = {
+        "mot_de_passe": {"type", "valeur", "visages_caches", "plusieurs_visages"},
+        "identites": {"type", "chacune_ouvre", "visages_caches", "plusieurs_visages"},
+    }
+    HIDDEN_KEYS = {"clair", "clair_longueur", "sha256_clair"}
+    HIDDEN_CREDENTIALS = {"mot_de_passe", "identite"}
+
+    def _open_hidden(self, data: bytes, j: int, h: dict) -> None:
+        self.assertLessEqual(set(h), self.HIDDEN_KEYS | self.HIDDEN_CREDENTIALS, f"unknown hidden-face field: {h}")
+        kinds = set(h) & self.HIDDEN_CREDENTIALS
+        self.assertEqual(len(kinds), 1, f"a hidden face needs exactly one credential: {h}")
+        if "mot_de_passe" in kinds:
+            plain = decrypt(data, password=h["mot_de_passe"].encode())
+        else:
+            plain = decrypt(data, identities=[Identity(bytes.fromhex(h["identite"]))])
+        self.assertEqual(sha256(plain), h["sha256_clair"])
+        self.assertEqual(plain, hidden_plaintext(j, h["clair_longueur"]))
+
     def test_manifest(self):
         t0 = time.time()
         foreign = Identity(b"\xee" * 32)
+        seen = {"key hidden face": 0, "password hidden face": 0, "several faces": 0}
         for v in self.manifest["vecteurs"]:
             with self.subTest(v["nom"]):
+                self.assertLessEqual(set(v), self.VECTOR_KEYS, f"unknown vector field in {v['nom']}")
                 data = (VECTORS / v["fichier"]).read_bytes()
                 self.assertEqual(len(data), v["taille"])
                 self.assertEqual(sha256(data), v["sha256_fichier"])
                 o = v["ouverture"]
+                self.assertIn(o["type"], self.OPENING_KEYS, f"unknown opening type in {v['nom']}")
+                self.assertLessEqual(set(o), self.OPENING_KEYS[o["type"]], f"unknown opening field in {v['nom']}")
+                # Main face.
                 if o["type"] == "mot_de_passe":
                     plain = decrypt(data, password=o["valeur"].encode())
                     self.assertEqual(sha256(plain), v["sha256_clair"])
                     self.assertEqual(plain, main_plaintext(v["clair_longueur"]))
-                    for j, h in enumerate(o.get("visages_caches", [])):
-                        hp = decrypt(data, password=h["mot_de_passe"].encode())
-                        self.assertEqual(sha256(hp), h["sha256_clair"])
-                        self.assertEqual(hp, hidden_plaintext(j, h["clair_longueur"]))
                 else:
+                    self.assertTrue(o["chacune_ouvre"])
                     for s in o["chacune_ouvre"]:
                         plain = decrypt(data, identities=[Identity(bytes.fromhex(s))])
                         self.assertEqual(sha256(plain), v["sha256_clair"])
-                        self.assertEqual(len(plain), v["clair_longueur"])
+                        self.assertEqual(plain, main_plaintext(v["clair_longueur"]))
                     # Several identities of the same face still give one triple.
                     if len(o["chacune_ouvre"]) > 1:
                         ids = [Identity(bytes.fromhex(s)) for s in o["chacune_ouvre"][:3]]
                         self.assertEqual(sha256(decrypt(data, identities=ids)), v["sha256_clair"])
+                # Hidden faces.
+                for j, h in enumerate(o.get("visages_caches", [])):
+                    self._open_hidden(data, j, h)
+                    seen["key hidden face" if "identite" in h else "password hidden face"] += 1
+                # Identities that open different faces, given together.
+                if "plusieurs_visages" in o:
+                    ids = [Identity(bytes.fromhex(s)) for s in o["plusieurs_visages"]]
+                    self.assertGreater(len(ids), 1)
+                    with self.assertRaises(SeveralFaces):
+                        decrypt(data, identities=ids)
+                    seen["several faces"] += 1
                 with self.assertRaises(CannotDecrypt):
                     decrypt(data, identities=[foreign])
                 with self.assertRaises(CannotDecrypt):
                     decrypt(data, password=b"wrong password")
+        # The manifest exercises each kind of check at least once.
+        for kind, n in seen.items():
+            self.assertGreater(n, 0, f"no vector covers: {kind}")
         print(f"\n  [vectors opened in {time.time() - t0:.2f} s]", end=" ", file=sys.stderr)
 
     def test_tampering_fails(self):

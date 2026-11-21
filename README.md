@@ -53,6 +53,7 @@ cargo build --release
 | 07 | [Plan de release](docs/07-plan-release.md) | Ce qui manque avant une première version, et dans quel ordre |
 | 08 | [Durcissement](docs/08-durcissement.md) | Mémoire, fuzzing guidé par la couverture, chaîne d'approvisionnement, builds reproductibles, releases signées |
 | 09 | [Preuves renforcées](docs/09-preuves-renforcees.md) | Fuite exacte de la taille (et le bourrage « seau »), IND-CCA du KEM caché vérifié par CryptoVerif, sécurité face à un adversaire quantique |
+| 10 | [Évaluation](docs/10-evaluation.md) | Comparaison avec age (taille, débit, ce qu'un tiers apprend) et batterie NIST STS |
 
 ## Ce qui est vérifié
 

@@ -4,6 +4,10 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), et les 
 
 ## [Non publié]
 
+### Ajouté
+- **Évaluation** ([docs/10](docs/10-evaluation.md)) : comparaison avec age v1.2.1 (débit pratiquement identique ; surcoût fixe d'environ 92 Ko plus 8 à 9 % ; ce qu'un tiers apprend) et **batterie NIST STS passée en entier** (188 sous-tests, sur 63 fichiers Janus à clairs nuls). Scripts dans `bancs/`.
+- **Vecteur `visages-cles`** : visage caché ouvert par une clé, et erreur « plusieurs visages ». Les clients vérifient ces cas et refusent tout champ inconnu du manifeste.
+
 ## [0.2.0-alpha] — 2026-11-21
 
 Format **Janus v1**, candidat au gel. **Incompatible avec la v0.1.0-alpha** (voir « Modifié »).

@@ -423,10 +423,11 @@ Known limitations:
 | `nom` | vector name |
 | `fichier`, `taille`, `sha256_fichier` | file name, size, SHA-256 |
 | `ouverture.type` | `mot_de_passe` (password, in `valeur`) or `identites` (each seed in `chacune_ouvre` opens the file) |
-| `ouverture.visages_caches` | hidden faces: `mot_de_passe`, `clair_longueur`, `sha256_clair` |
+| `ouverture.visages_caches` | hidden faces, each opened by a password (`mot_de_passe`) or by the identity whose seed is `identite` (hex); with `clair_longueur` and `sha256_clair` |
+| `ouverture.plusieurs_visages` | seeds (hex) of identities that, given **together**, must make opening fail with the "several faces" error of § 8, step 4 |
 | `clair_longueur`, `sha256_clair` | main-face plaintext length and SHA-256 |
 
-Plaintexts: main face byte `k` = `(31·k + 7) mod 256`; hidden face number `j` (from 0) byte `k` = `(17·k + 3 + 50·j) mod 256`. Seeds: recipient `i` (from 0) has the seed of 32 bytes equal to `i + 1`. An implementation MUST open every vector with every listed credential, MUST fail on each with a foreign identity (for instance the seed of 32 bytes equal to 0xEE) and with a wrong password, and its own files MUST open with the reference implementation.
+Plaintexts: main face byte `k` = `(31·k + 7) mod 256`; hidden face number `j` (from 0) byte `k` = `(17·k + 3 + 50·j) mod 256`. Seeds: recipient `i` (from 0) has the seed of 32 bytes equal to `i + 1`. The vector `visages-cles` has a decoy for two keys, a hidden face for a third key and a hidden face for a password. An implementation MUST open every vector with every listed credential, MUST fail on each with a foreign identity (for instance the seed of 32 bytes equal to 0xEE) and with a wrong password, and its own files MUST open with the reference implementation.
 
 `janus-rs/vecteurs/cles.json` lists, under `cles`, three entries with the fields `graine` (seed, hex), `description`, `identite` (expected identity string), `cle_publique` (expected public-key string) and `cle_publique_hex_sha256` (SHA-256 of the 1216-byte public key).
 

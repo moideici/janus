@@ -369,13 +369,36 @@ public final class Tests {
             int j = 0;
             for (Object hObj : Json.list(opening.get("visages_caches"))) {
                 Map<String, Object> hf = Json.obj(hObj);
-                byte[] pw = ((String) hf.get("mot_de_passe")).getBytes(StandardCharsets.UTF_8);
                 long len = (Long) hf.get("clair_longueur");
                 String sha = (String) hf.get("sha256_clair");
                 check(name + ": hidden plaintext rule " + j, Bytes.hex(Bytes.sha256(hiddenPlaintext((int) len, j))).equals(sha));
-                checkOpens(name + ": hidden face " + j + " (\"" + hf.get("mot_de_passe") + "\")",
-                           () -> Janus.decryptWithPassword(file, pw), sha, len);
+                boolean byPassword = hf.get("mot_de_passe") instanceof String;
+                boolean byIdentity = hf.get("identite") instanceof String;
+                if (byPassword && !byIdentity) {
+                    byte[] pw = ((String) hf.get("mot_de_passe")).getBytes(StandardCharsets.UTF_8);
+                    checkOpens(name + ": hidden face " + j + " (password \"" + hf.get("mot_de_passe") + "\")",
+                               () -> Janus.decryptWithPassword(file, pw), sha, len);
+                } else if (byIdentity && !byPassword) {
+                    String seedHex = (String) hf.get("identite");
+                    XWing.KeyPair kp = new XWing.KeyPair(Bytes.hex(seedHex));
+                    checkOpens(name + ": hidden face " + j + " (identity " + seedHex.substring(0, 4) + "…)",
+                               () -> Janus.decryptWithIdentities(file, List.of(kp)), sha, len);
+                } else {
+                    fail(name + ": hidden face " + j + " has an unknown kind (expected exactly one of "
+                         + "'mot_de_passe' or 'identite'; keys: " + hf.keySet() + ")");
+                }
                 j++;
+            }
+            List<Object> together = Json.list(opening.get("plusieurs_visages"));
+            if (!together.isEmpty()) {
+                List<XWing.KeyPair> ids = new ArrayList<>();
+                StringBuilder names = new StringBuilder();
+                for (Object s : together) {
+                    ids.add(new XWing.KeyPair(Bytes.hex((String) s)));
+                    names.append(names.length() == 0 ? "" : " + ").append(((String) s).substring(0, 4)).append('…');
+                }
+                checkFails(name + ": identities " + names + " together -> several faces",
+                           () -> Janus.decryptWithIdentities(file, ids), Janus.JanusException.Kind.SEVERAL_FACES);
             }
             checkFails(name + ": foreign identity (0xEE…) fails", () -> Janus.decryptWithIdentities(file, List.of(foreign)));
             if (opening.get("type").equals("mot_de_passe")) {
