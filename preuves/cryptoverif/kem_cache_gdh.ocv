@@ -1,0 +1,87 @@
+(* Janus v1 — le KEM caché est IND-CCA : chemin X25519 (gap-DH).
+
+   Ce modèle vérifie par machine une moitié de Q2 (docs/09, § 2) : la clé
+   partagée d'un emplacement reste secrète, même face à un oracle de
+   décapsulation, tant que le problème gap-DH est difficile, même si le secret
+   d'ML-KEM est entièrement compromis : l'adversaire choisit le chiffré ML-KEM
+   et sait décapsuler lui-même (decM est une fonction publique). Seule reste
+   supposée la propriété C2PRI d'ML-KEM, qui ne dépend que de SHA3 (voir decM).
+
+   Correspondance avec la spec (spec/janus-v1.md, § 5) :
+     ctX = u(P), point X25519 éphémère         (Elligator abstrait : on transmet le point)
+     kp  = κ' = κ ⊕ SHAKE256("janus/v1/masque" ‖ ss_X ‖ ct_X)   (H2)
+     k   = SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ label)            (H1, combineur X-Wing)
+   Kemeleon est abstrait par l'identité : κ est le chiffré ML-KEM.
+
+   Hors du modèle, traités sur papier (docs/09, § 2) :
+   - le point « sale » (composante d'ordre faible) : réduit au groupe d'ordre
+     premier par le lemme du cofacteur ;
+   - les encodages Elligator et Kemeleon, plusieurs-pour-un : c'est la
+     malléabilité bénigne, que le document 06 traite par la notion RCCA.
+
+   Lancer :  cryptoverif kem_cache_gdh.ocv *)
+
+param Nd.
+
+type Z_t [large, bounded, nonuniform].
+type G_t [large, bounded].
+type key_t [large, fixed].
+type kappa_t [large, fixed].
+type kemkey_t [large, fixed].
+type hashkey1 [large, fixed].
+type hashkey2 [large, fixed].
+
+(* X25519 : un groupe d'ordre premier où gap-DH est difficile. *)
+proba PCollKey1.
+proba PCollKey2.
+expand DH_basic(G_t, Z_t, g, exp, exp', mult).
+expand DH_proba_collision(G_t, Z_t, g, exp, exp', mult, PCollKey1, PCollKey2).
+proba pGDH.
+proba pDistRerandom.
+expand GDH(G_t, Z_t, g, exp, exp', mult, pGDH, pDistRerandom).
+
+expand Xor(kappa_t, xor, zero).
+
+(* ML-KEM : aucune hypothèse de secret (l'adversaire sait décapsuler : decM est
+   publique), SAUF une : deux chiffrés différents ne donnent jamais le même
+   secret (C2PRI, « ciphertext second-preimage resistance »). Sans elle, la
+   première version de ce modèle ne se prouvait pas, et pour cause : le combineur
+   ne hache pas ct_M, donc un adversaire qui trouverait ct'_M ≠ ct_M de même
+   secret modifierait κ' sans changer la clé. Pour ML-KEM, C2PRI découle de la
+   transformée FO à rejet implicite et de la résistance aux collisions de
+   SHA3/SHAKE, pas de MLWE (Barbosa et al., analyse d'X-Wing, 2024) : elle reste
+   vraie face à un ordinateur quantique. On la modélise par l'injectivité. *)
+fun decM(kappa_t): kemkey_t [data].
+
+(* Combineur (SHA3-256) et masque (SHAKE256) : oracles aléatoires. *)
+expand ROM_hash_large_4(hashkey1, kemkey_t, G_t, G_t, G_t, key_t, H1, H1_oracle, qH1).
+expand ROM_hash_large_2(hashkey2, G_t, G_t, kappa_t, H2, H2_oracle, qH2).
+
+query secret k.
+
+process
+  Ostart() :=
+    hk1 <-R hashkey1;
+    hk2 <-R hashkey2;
+    skX <-R Z_t;
+    pkX <- exp(g, skX);
+    return(pkX);
+    (run H1_oracle(hk1) | run H2_oracle(hk2) |
+     (* Encapsulation défi, vers la clé honnête. L'adversaire impose le chiffré ML-KEM. *)
+     (Ochall(ctM: kappa_t) :=
+       e <-R Z_t;
+       ctX: G_t <- exp(g, e);
+       kp: kappa_t <- xor(ctM, H2(hk2, exp(pkX, e), ctX));
+       k: key_t <- H1(hk1, decM(ctM), exp(pkX, e), ctX, pkX);
+       return(ctX, kp))
+     |
+     ((* Oracle de décapsulation, sur tout chiffré sauf le défi lui-même. *)
+     foreach id <= Nd do
+     Odec(ctX': G_t, kp': kappa_t) :=
+       if defined(ctX, kp) && ctX' = ctX && kp' = kp then
+         yield
+       else
+         ssX' <- exp(ctX', skX);
+         ctM' <- xor(kp', H2(hk2, ssX', ctX'));
+         return(H1(hk1, decM(ctM'), ssX', ctX', pkX)))
+    )

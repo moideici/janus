@@ -401,8 +401,12 @@ The proofs are on paper, in French, and have not been reviewed:
 | Property | Notion | Assumptions | Document |
 |---|---|---|---|
 | Confidentiality, indistinguishability from random, deniability of hidden faces | IND$, DENI | MLWE **or** gap-DH; Elligator 2 statistical; random oracles | docs/04 |
+| The hidden KEM (§ 5.2–5.3), at the level of decoded ciphertexts | IND-CCA, **machine-checked** with CryptoVerif (`preuves/cryptoverif/`) | (IND-CCA2 of ML-KEM and SHA3-256 as a PRF keyed by `ss_M`) **or** (gap-DH and C2PRI of ML-KEM) | docs/09 |
 | Key commitment (at most 4 keys per file), per-face integrity and consistency, at most 4 passwords tested per partition-oracle query | collisions, INT-CTXT | SHA-256, HMAC, ChaCha20-Poly1305 | docs/05 |
 | Active confidentiality | IND-RCCA (strict IND-CCA is impossible with several tags) | the above, plus IND-CCA of ML-KEM **or** gap-DH | docs/06 |
+| File size | leaks exactly what PADME leaks | none (information-theoretic) | docs/09 |
+
+**Against quantum adversaries** (docs/09, § 3), the ML-KEM path of every proof holds in the standard model, without random oracles, assuming IND-CCA of ML-KEM, MLWE, SHA3-256 as a PRF keyed by `ss_M`, and HMAC-SHA-256 as a PRF and dual PRF. Password faces rely on Argon2id as a random oracle: against a quantum adversary, a password of `h` bits of entropy is worth about `h/2` bits.
 
 Known limitations:
 - Different recipients of one file can be shown different contents, one per tag. Comparing ciphertext hashes does not prove two people read the same plaintext; compare plaintext hashes.

@@ -199,6 +199,8 @@ Deux chemins, dont un seul suffit, comme au document 04 :
 | Confidentialité face aux fichiers piégés | **IND-RCCA** | 06 | les précédentes, plus IND-CCA de ML-KEM **ou** gap-DH |
 
 **Ce qui manque encore pour une confiance sérieuse :**
-- la vérification par machine (CryptoVerif) ;
-- le modèle quantique de l'oracle aléatoire (QROM) ;
+- la vérification par machine (CryptoVerif) : *faite pour le KEM caché (document 09, § 4)*, pas encore pour le fichier entier ;
+- le modèle quantique de l'oracle aléatoire (QROM) : *traité dans le document 09, § 3* ;
 - la relecture par un cryptographe.
+
+**Précision apportée par la vérification (document 09, § 2.2).** Le chemin X25519 de G₁ suppose implicitement qu'ML-KEM est **C2PRI** : deux chiffrés différents ne donnent jamais le même secret. C'est vrai pour ML-KEM à une collision de SHA3 près, et IND-RCCA n'est de toute façon pas touché, puisqu'une telle collision ferait répondre « test ».

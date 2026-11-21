@@ -195,6 +195,8 @@ X-Wing produit un chiffré `ct = ct_M ‖ ct_X`. Aucune des deux parties ne ress
 
 ## 7. Taille du fichier et bourrage
 
+> **En v1**, la taille n'est plus tirée dans `[Ref, PADMÉ(Ref)]` mais dans tout le « seau » PADMÉ de `Ref`, dont la fuite est exactement celle de PADMÉ ([spec/janus-v1.md](../spec/janus-v1.md), § 6.2 ; [09-preuves-renforcees.md](09-preuves-renforcees.md), § 1). Cette section décrit la base v0.
+
 Le contenu bourré est `C = M ‖ 0x80 ‖ 0x00^z`. Sa longueur `P` est choisie ainsi :
 
 ```
@@ -316,9 +318,9 @@ Cette construction est STREAM (labo 8.1). Le nonce est un simple compteur, ce qu
 | # | Question | Piste |
 |---|---|---|
 | Q1 | ~~Position de l’étiquette dans le combineur X-Wing~~ | **Résolue** : à la fin (draft-11). Le prototype reproduit le vecteur de test n° 1 du draft |
-| Q2 | Le point « sale » d'Elligator conserve-t-il la sécurité d'X-Wing ? | **En partie résolue** : oui pour IND-CPA dans le modèle de l'oracle aléatoire ([04-preuve-deux-visages.md](04-preuve-deux-visages.md), étape G₂). IND-CCA reste à prouver. La preuve a aussi montré que l'éphémère doit être tiré **uniformément modulo ℓ**, et non clampé (§ 7.1 du même document). *Corrigé dans le code le 18 novembre 2026.* |
+| Q2 | Le point « sale » d'Elligator conserve-t-il la sécurité d'X-Wing ? | **En partie résolue** : oui pour IND-CPA dans le modèle de l'oracle aléatoire ([04-preuve-deux-visages.md](04-preuve-deux-visages.md), étape G₂). **IND-CCA prouvé et vérifié par machine le 21 novembre 2026** ([09-preuves-renforcees.md](09-preuves-renforcees.md), § 2 : deux chemins, CryptoVerif, lemme du cofacteur ; le chemin X25519 demande en plus C2PRI d'ML-KEM). La preuve a aussi montré que l'éphémère doit être tiré **uniformément modulo ℓ**, et non clampé (§ 7.1 du même document). *Corrigé dans le code le 18 novembre 2026.* |
 | Q3 | Kemeleon n'est qu'un draft (version 02) : tailles et algorithme peuvent changer | **Tranchée (gel)** : Janus v1 suit `draft-irtf-cfrg-kemeleon-02`, variante par défaut, tel que décrit au § 5 et fixé par les vecteurs de test. Une évolution du draft ne change pas Janus v1 |
-| Q4 | Quelle est la fuite exacte du bourrage « PADMÉ aléatoire » ? | **Règle figée**, analyse à faire : calculer l'information mutuelle par rapport à PADMÉ pur. L'analyse ne changerait le format que si elle révélait une faille |
+| Q4 | Quelle est la fuite exacte du bourrage « PADMÉ aléatoire » ? | **Résolue le 21 novembre 2026** ([09-preuves-renforcees.md](09-preuves-renforcees.md), § 1) : calculée exactement, elle dépassait celle de PADMÉ (0,8 bit en moyenne, 3 à 4 au pire). La règle passe au « seau » PADMÉ, dont la fuite est exactement celle de PADMÉ. Seul le chiffrement change |
 | Q5 | 16 emplacements (26 Kio) ou 8 (13 Kio) ? | **Tranchée (gel)** : 16. Le nombre de destinataires d'un fichier reste caché jusqu'à 16, et l'en-tête de 26 Kio pèse peu à côté de la réserve de 64 Kio |
 | Q6 | Calibrer Argon2id (64 Mio, t = 3) ou passer à la première configuration de la RFC 9106 (2 Gio) ? | **Tranchée (gel)** : 64 Mio, t = 3, p = 4 (seconde configuration de la RFC 9106). 2 Gio exclurait les téléphones et les petites machines, et un fichier doit s'ouvrir partout. Pour un secret important, la vraie protection est un mot de passe long, ou une clé |
 | Q7 | Encodage texte des clés (Bech32m sans limite comme age, ou base64 avec somme de contrôle) ? | **Tranchée (gel)** : Bech32m, § 3.1. Les identités de l'aperçu v0.1.0-alpha (`JANUS-SECRET-V0-…`) restent lisibles jusqu'à la v1.0, le temps de migrer |

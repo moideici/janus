@@ -1,0 +1,79 @@
+(* Janus v1 — le KEM caché est IND-CCA : chemin ML-KEM (post-quantique).
+
+   Ce modèle vérifie par machine l'autre moitié de Q2 (docs/09, § 2) : la clé
+   partagée d'un emplacement reste secrète, même face à un oracle de
+   décapsulation, si ML-KEM-768 est IND-CCA2 et si le combineur est une
+   fonction pseudo-aléatoire de clé ss_M (l'hypothèse de l'analyse d'X-Wing),
+   ET MÊME SI X25519 EST ENTIÈREMENT CASSÉ : l'adversaire reçoit la clé
+   secrète X25519 (skX).
+
+   Aucun oracle aléatoire : ce chemin est prouvé dans le modèle standard, ce
+   qui le rend valable tel quel face à un adversaire quantique (docs/09, § 3).
+
+   Correspondance avec la spec (spec/janus-v1.md, § 5) :
+     ctX = u(P), point X25519 éphémère         (Elligator abstrait)
+     kp  = κ' = κ ⊕ SHAKE256(...)               (H2, sans hypothèse)
+     k   = SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖ label)   (H1, PRF de clé ss_M)
+   Kemeleon est abstrait par l'identité.
+
+   Lancer :  cryptoverif kem_cache_mlkem.ocv *)
+
+param Nd.
+
+type keyseed_t [large, fixed].
+type pkey_t [bounded].
+type skey_t [bounded].
+type kemkey_t [large, fixed].
+type kemct_t [large, fixed].
+type encapoutput_t [bounded].
+type key_t [large, fixed].
+type Z_t [large, bounded, nonuniform].
+type G_t [large, bounded].
+
+(* ML-KEM-768 : un KEM IND-CCA2. *)
+proba PencM.
+proba PkeycollM.
+proba PctxtcollM.
+expand IND_CCA2_KEM(keyseed_t, pkey_t, skey_t, kemkey_t, kemct_t, encapoutput_t, pkgen, skgen, encap, pair, decap, injbot, PencM, PkeycollM, PctxtcollM).
+
+(* X25519 : un groupe, sans aucune hypothèse (sa clé secrète est publiée). *)
+expand DH_basic(G_t, Z_t, g, exp, exp', mult).
+
+(* Masque : une fonction quelconque, sans hypothèse. *)
+expand Xor(kemct_t, xor, zero).
+fun H2(G_t, G_t): kemct_t.
+
+(* Combineur : fonction pseudo-aléatoire de clé ss_M. *)
+proba Pprf.
+expand PRF_large_3(kemkey_t, G_t, G_t, G_t, key_t, H1, Pprf).
+
+query secret k.
+
+process
+  Ostart() :=
+    seedM <-R keyseed_t;
+    pkM <- pkgen(seedM);
+    skX <-R Z_t;
+    pkX <- exp(g, skX);
+    (* X25519 entièrement compromis : l'adversaire reçoit skX. *)
+    return(pkM, pkX, skX);
+    (
+     (Ochall() :=
+       let pair(ssM: kemkey_t, ctM: kemct_t) = encap(pkM) in
+       e <-R Z_t;
+       ctX: G_t <- exp(g, e);
+       ssX <- exp(pkX, e);
+       kp: kemct_t <- xor(ctM, H2(ssX, ctX));
+       k: key_t <- H1(ssM, ssX, ctX, pkX);
+       return(ctX, kp))
+     |
+     (foreach id <= Nd do
+     Odec(ctX': G_t, kp': kemct_t) :=
+       if defined(ctX, kp) && ctX' = ctX && kp' = kp then
+         yield
+       else
+         ssX' <- exp(ctX', skX);
+         ctM' <- xor(kp', H2(ssX', ctX'));
+         let injbot(ssM') = decap(ctM', skgen(seedM)) in
+           return(H1(ssM', ssX', ctX', pkX)))
+    )

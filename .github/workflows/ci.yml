@@ -137,3 +137,25 @@ jobs:
           sha256sum a/janus-rs/target/release/janus /tmp/b/janus-rs/target/release/janus
           cmp a/janus-rs/target/release/janus /tmp/b/janus-rs/target/release/janus
           echo "Binaire reproductible."
+
+  preuves:
+    # Les modèles CryptoVerif (preuves/cryptoverif/) doivent toujours se prouver.
+    name: Preuves (CryptoVerif)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: "4.14"
+      - name: CryptoVerif
+        run: opam install -y cryptoverif.2.13
+      - name: Vérification des modèles
+        working-directory: preuves/cryptoverif
+        run: |
+          lib="$(opam var bin)/default"
+          for f in *.ocv; do
+            echo "== $f"
+            opam exec -- cryptoverif -lib "$lib" "$f" > "$f.log" 2>&1 || true
+            tail -4 "$f.log"
+            grep -q "All queries proved." "$f.log" || { echo "$f : preuve non obtenue"; exit 1; }
+          done

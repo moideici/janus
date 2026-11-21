@@ -13,3 +13,6 @@ __pycache__/
 clients/java/out/
 clients/csharp/**/bin/
 clients/csharp/**/obj/
+
+# Journaux de CryptoVerif
+preuves/cryptoverif/*.log

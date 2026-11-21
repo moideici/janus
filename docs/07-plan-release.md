@@ -39,7 +39,7 @@ Toutes les questions de format sont tranchées. Le format v1 est **candidat au g
 
 **Spécification et implémentations indépendantes (20 novembre 2026).** Le format est décrit en anglais dans [`spec/janus-v1.md`](../spec/janus-v1.md). Quatre clients (Python, TypeScript, C#, Java) ont été écrits à partir de ce seul texte : tous ouvrent les vecteurs de test, et les cinq implémentations s'ouvrent mutuellement leurs fichiers. Leurs retours ont servi à préciser la spécification (vecteur X-Wing complet, décodage de `pk_X`, règles R1 à R5 au complet, fichiers de clés).
 
-Restent ouvertes des questions de **preuve**, pas de format : IND-CCA du point sale (Q2), fuite exacte du bourrage (Q4), vérification par machine, modèle quantique de l'oracle aléatoire.
+~~Restent ouvertes des questions de preuve : Q2, Q4, vérification par machine, QROM.~~ *Traitées le 21 novembre 2026 dans [09-preuves-renforcees.md](09-preuves-renforcees.md)* : Q4 a conduit au bourrage « seau » (le chiffrement seul change) ; Q2 est prouvé et vérifié par CryptoVerif ; le chemin ML-KEM se passe de l'oracle aléatoire. Reste à vérifier par machine le fichier entier, et surtout à faire relire.
 
 ## Les étapes
 

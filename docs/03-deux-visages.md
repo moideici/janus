@@ -110,7 +110,7 @@ L₁        = longueur du visage principal (le leurre)
 Réserve   = max(R_min, ⌈L₁ / ρ⌉)                     fonction FIXE, publique
           = max(65 536, ⌈L₁ / 16⌉)                   valeurs retenues (QB-1)
 Ref       = H + c(L₁) + Réserve
-F         = entier uniforme dans [Ref, PADMÉ(Ref)]   comme en v0, mêmes raisons
+F         = entier uniforme dans le seau PADMÉ de Ref   (docs/09, § 1 ; avant le 21 novembre 2026 : [Ref, PADMÉ(Ref)])
 ```
 
 - **Capacité du visage caché** : il faut `c(L₂) ≤ Réserve`. Sinon, Janus refuse et explique qu'il faut un leurre plus grand. On ne peut **jamais** agrandir la réserve pour faire entrer le secret, car cela rendrait sa taille dépendante du secret.
@@ -181,7 +181,7 @@ Une seule erreur, « impossible de déchiffrer » (J-07). Jamais de message du t
 | `w` | `K` | `K ‖ début ‖ longueur` |
 | Mot de passe | seulement en `E_0` | dans n'importe quel emplacement, avec un seul Argon2id |
 | Bourrage | `0x80 ‖ 0x00*` chiffré | aucun : la longueur est dans `w`, le reste est de l'aléa |
-| Taille | `[Ref, PADMÉ(Ref)]` | idem, avec en plus une réserve fixe dans `Ref` |
+| Taille | seau PADMÉ de `Ref` (docs/09, § 1) | idem, avec en plus une réserve dans `Ref` |
 | Tailles impossibles | 16 sur 65 552 | aucune |
 | P2 (intégrité) | chaque octet du fichier | chaque octet **du visage ouvert**, plus la taille totale `F`. Modifier la réserve ne gêne pas le leurre, et c'est voulu |
 | P3 (engagement) | une seule clé par fichier | **au plus quatre** clés (QB-3), une par étiquette (théorème 1 de [05-preuve-integrite.md](05-preuve-integrite.md)) |

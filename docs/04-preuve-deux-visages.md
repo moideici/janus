@@ -293,9 +293,9 @@ Le format ne change pas, les vecteurs de test si.
 
 - **Plusieurs versions d'un même fichier** (piège 10.1) et **traces du système** (piège 10.6) : hors du modèle.
 - **Les canaux auxiliaires** autres que le temps d'ouverture du leurre. Ce dernier est mesuré par dudect, pas prouvé.
-- **IND-CCA du KEM caché** : non requis par ce jeu, mais nécessaire pour prouver l'intégrité (P2, P3) face à des fichiers fabriqués. C'est un autre théorème, à écrire.
-- **La sécurité en présence d'un adversaire quantique** qui interroge les oracles aléatoires en superposition (modèle QROM). Les étapes G₁, G₅ et G₆ devraient s'y transposer, avec des bornes typiquement en `q²` au lieu de `q`. Ce n'est ni rédigé ni vérifié.
-- **La vérification par machine.** CryptoVerif, qui raisonne directement par séquences de jeux dans le modèle calculatoire, est l'outil adapté. EasyCrypt serait une alternative plus lourde.
+- ~~**IND-CCA du KEM caché**~~ : **prouvé et vérifié par machine** dans le document 09, § 2.
+- ~~**La sécurité en présence d'un adversaire quantique**~~ : traitée dans le document 09, § 3. Pour les visages à clé, le chemin ML-KEM se passe entièrement de l'oracle aléatoire ; pour un mot de passe, l'étape G₁ devient `2·(q_A + 1)·2^(−h/2)`.
+- **La vérification par machine.** *En partie faite* : le KEM caché est vérifié par CryptoVerif (document 09, § 4). Le jeu DENI complet ne l'est pas encore.
 
 ---
 
@@ -305,6 +305,6 @@ Le format ne change pas, les vecteurs de test si.
 |---|---|---|
 | ~~1~~ | ~~Corriger le scalaire (§ 7.1)~~ **Fait** | H6 rétablie, donc le déni post-quantique |
 | ~~2~~ | ~~Masquer `κ` (§ 7.2)~~ **Fait** | Discrétion hybride |
-| 3 | Écrire le théorème d'intégrité (IND-CCA du KEM caché, P2 à P4 par visage) | Complète la preuve |
-| 4 | Modéliser les étapes G₁ à G₇ dans CryptoVerif | Fait vérifier la preuve par une machine |
+| ~~3~~ | ~~Écrire le théorème d'intégrité~~ **Fait** (documents 05, 06 et 09) | Complète la preuve |
+| 4 | Modéliser les étapes G₁ à G₇ dans CryptoVerif. *Le KEM caché (G₂) l'est déjà (document 09, § 4)* | Fait vérifier la preuve par une machine |
 | 5 | Faire relire par un cryptographe | Indispensable avant toute publication |

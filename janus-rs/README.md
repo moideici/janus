@@ -86,7 +86,7 @@ Le témoin prouve que la mesure sait repérer une fuite.
 - **Discrétion hybride** : le chiffré ML-KEM encodé (`κ`) est masqué par un flux dérivé du secret X25519. Un emplacement à clé ne devient reconnaissable que si MLWE **et** X25519 tombent tous les deux. C'est la même garantie que pour la confidentialité ([docs/04-preuve-deux-visages.md](../docs/04-preuve-deux-visages.md), § 7.2). Le χ² des `κ` masqués vaut 261, pour environ 255 attendus.
 - Un test du χ² repère sans peine les chiffrés ML-KEM bruts (χ² = 3129, pour environ 1023 attendus). Il ne distingue ni Kemeleon ni les fichiers Janus de l'aléa (χ² ≈ 265, pour environ 255 attendus).
 - Les éphémères sont bien « sales » : environ 1 sur 8 seulement est dans le sous-groupe premier.
-- La taille est uniforme dans [Ref, PADMÉ(Ref)] et indépendante du nombre de destinataires.
+- La taille est uniforme dans le seau PADMÉ de Ref (docs/09, § 1) et indépendante du nombre de destinataires.
 
 ### Deux visages
 - **Chaque identifiant ouvre son visage, et seulement le sien**, avec toutes les combinaisons : deux mots de passe, deux jeux de clés, mot de passe et clé dans les deux sens.

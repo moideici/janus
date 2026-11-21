@@ -15,7 +15,7 @@
 | Post-quantique hybride (ML-KEM-768 + X25519) | non (2.4) | en option | **oui, toujours** |
 | L'outil se reconnaît au premier octet | oui | oui | **non : tout le fichier ressemble à de l'aléa** |
 | Le nombre de destinataires se voit | oui, avec leurs identifiants | oui | **non** (16 emplacements toujours présents) |
-| La taille du clair se lit | à quelques octets près | exactement | **à quelques pour cent près** (bourrage PADMÉ aléatoire, et réserve) |
+| La taille du clair se lit | à quelques octets près | exactement | **à quelques pour cent près** (bourrage PADMÉ, et réserve : la taille ne révèle que ce que révèle PADMÉ) |
 | Un même fichier s'ouvre sur plusieurs contenus | non | non | **oui : un leurre et jusqu'à 3 secrets** |
 | Engagement de clé | non | oui | **oui** |
 
@@ -37,6 +37,7 @@ cargo build --release
 | [`spec/janus-v1.md`](spec/janus-v1.md) | **La spécification normative du format, en anglais** : tout ce qu'il faut pour écrire une autre implémentation |
 | [`clients/`](clients/README.md) | Quatre implémentations indépendantes écrites à partir de la spécification seule (Python, TypeScript, C#, Java), et le test d'interopérabilité croisée |
 | [`docs/`](docs/) | La conception et les preuves, de la cartographie au plan de release (voir ci-dessous) |
+| [`preuves/cryptoverif/`](preuves/cryptoverif/README.md) | Les preuves vérifiées par machine (CryptoVerif) : le KEM caché, par ses deux chemins |
 
 ### Documents
 
@@ -50,6 +51,7 @@ cargo build --release
 | 06 | [Preuve de confidentialité active](docs/06-preuve-confidentialite-active.md) | IND-RCCA, et pourquoi IND-CCA strict est impossible avec deux visages |
 | 07 | [Plan de release](docs/07-plan-release.md) | Ce qui manque avant une première version, et dans quel ordre |
 | 08 | [Durcissement](docs/08-durcissement.md) | Mémoire, fuzzing guidé par la couverture, chaîne d'approvisionnement, builds reproductibles, releases signées |
+| 09 | [Preuves renforcées](docs/09-preuves-renforcees.md) | Fuite exacte de la taille (et le bourrage « seau »), IND-CCA du KEM caché vérifié par CryptoVerif, sécurité face à un adversaire quantique |
 
 ## Ce qui est vérifié
 
@@ -58,6 +60,8 @@ cargo build --release
 - **Discrétion :** les fichiers passent le test du χ², alors que les chiffrés ML-KEM bruts sont détectés. L'éphémère X25519 est uniforme, même face à un adversaire capable de calculer des logarithmes discrets.
 - **Déni :** ce que voit l'adversaire contraint suit la même loi avec ou sans secret (test d'homogénéité, p = 0,58 en mélangeant des fichiers à 1 et à 3 visages cachés).
 - **Temps constant :** dudect ne détecte aucune fuite sur Kemeleon, Elligator, la décapsulation ou l'ouverture. Le test lui-même sait repérer une fuite : il la détecte sur un témoin volontairement vulnérable.
+- **Preuves vérifiées par machine :** le KEM caché (X-Wing au point sale, κ masqué) est IND-CCA, vérifié par CryptoVerif par ses deux chemins ; face à un ordinateur quantique, les visages à clé se prouvent sans oracle aléatoire ([document 09](docs/09-preuves-renforcees.md)).
+- **Taille :** elle ne révèle exactement que ce que révèle PADMÉ (calcul exact de la fuite, document 09).
 - **Durcissement :** aucun code `unsafe` hors d'un petit module de verrouillage mémoire ; secrets verrouillés en mémoire vive ; fuzzing guidé par la couverture chaque nuit ; dépendances vérifiées par cargo-deny ; binaire Linux reproductible ; releases signées par Sigstore ([document 08](docs/08-durcissement.md)).
 - **Robustesse :** 80 000 mutations de fuzzing (50 000, puis 30 000 après QB-3, dont un fichier à quatre visages) ne produisent jamais de panique, ni d'autre clair que l'original.
 

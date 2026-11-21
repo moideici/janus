@@ -8,6 +8,7 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), et les 
 - **Spécification normative en anglais** (`spec/janus-v1.md`), autonome : elle suffit pour écrire une autre implémentation.
 - **Quatre clients indépendants** (`clients/`) en Python, TypeScript, C# et Java, écrits à partir de la spécification seule, sans aucun téléchargement. Ils ouvrent tous les vecteurs, et les cinq implémentations s'ouvrent mutuellement leurs fichiers (`clients/interop.py`, 75 combinaisons sur 75). Ce sont des clients d'interopérabilité, pas en temps constant.
 - Intégration continue : tests des quatre clients et interopérabilité croisée.
+- **Preuves renforcées** ([docs/09](docs/09-preuves-renforcees.md)) : IND-CCA du KEM caché (Q2), avec le lemme du cofacteur, **vérifié par CryptoVerif** par ses deux chemins (`preuves/cryptoverif/`) ; la vérification a fait apparaître l'hypothèse C2PRI d'ML-KEM pour le chemin X25519. Face à un ordinateur quantique, le chemin ML-KEM de toutes les preuves vaut sans oracle aléatoire ; Argon2id dans le QROM.
 - **Durcissement** ([docs/08](docs/08-durcissement.md)) :
   - `#![deny(unsafe_code)]`, sauf un petit module (`memoire.rs`) d'appels système ;
   - identité et mots de passe verrouillés en mémoire vive (`mlock`, `VirtualLock`) ; pas de fichier core ; sous Linux, processus non lisible par ptrace ;
@@ -21,6 +22,7 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), et les 
 - Tests de la ligne de commande (`tests/cli.rs`).
 
 ### Corrigé
+- **Bourrage (Q4)** : l'analyse exacte de la fuite de la taille (`examples/fuite_bourrage.rs`) a montré que tirer `F` dans `[Ref, PADMÉ(Ref)]` fuyait 0,8 bit de plus en moyenne, et 3 à 4 bits de plus au pire, que PADMÉ. `F` est désormais uniforme dans tout le « seau » PADMÉ de `Ref` : fuite exactement égale à celle de PADMÉ, surcoût moyen 2,2 % au lieu de 0,6 %. Seul le chiffrement change ; les vecteurs de test sont régénérés.
 - En lisant l'entrée standard, ou en ouvrant un fichier en mémoire (`dechiffrer … -`), le tampon grandissait par réallocations : chaque ancienne copie du clair était libérée **sans être effacée**. Le tampon est désormais alloué une fois, ou agrandi en effaçant l'ancien.
 - Les secrets partagés intermédiaires d'ML-KEM et l'aléa de Kemeleon sont maintenant effacés après usage.
 
