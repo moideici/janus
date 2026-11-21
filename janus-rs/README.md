@@ -117,7 +117,7 @@ Le témoin prouve que la mesure sait repérer une fuite.
 | ZIP ZipCrypto | visible | sans objet | ZipCrypto, **cassé** | exacte, fichier par fichier, avec le CRC-32 | **en clair** |
 | ZIP AES-256 | visible | sans objet | visibles | exacte, fichier par fichier | **en clair** |
 | 7-Zip sans `-mhe` | visible | sans objet | non analysés | non analysée | lisibles par `7z l` |
-| **Janus** | **rien** | **rien** | **rien** | une plage (environ 0,8 % de 512 Mio) | non |
+| **Janus** | **rien** | **rien** | **rien** | une plage (environ 3 % de 512 Mio) | non |
 
 Pour un fichier sans signature, `inspect` teste l'hypothèse « fichier Janus v1 » : la taille est-elle possible, et le contenu indiscernable de l'aléa (χ² global et χ² par bloc de 4 Kio) ? Si oui, il calcule la plage de taille du leurre et la capacité d'un éventuel visage caché, dont il ne peut rien dire de plus. Il précise que cela **ne prouve pas** que le fichier vient de Janus.
 

@@ -219,7 +219,7 @@ La boucle se termine toujours, car `F = Ref` est toujours valide.
 
 > **En clair.** On ne prend pas `F = PADMÉ(Ref)` tel quel, parce que les tailles PADMÉ se terminent par beaucoup de bits à zéro. Un fichier d'environ 1 Mo dont les 15 bits de poids faible sont nuls, cela n'arrive qu'une fois sur 32 768 par hasard : ce serait une **signature**. Tirer la taille au hasard dans l'intervalle de PADMÉ supprime ce motif, avec une fuite du même ordre que PADMÉ (voir Q4). Cette variante est **propre à Janus** et doit être analysée.
 
-**Ce que la taille révèle à un tiers.** Toute la fuite tient en une plage : les longueurs de clair `L` compatibles avec une taille `F` sont celles qui vérifient `Ref(L) ≤ F ≤ PADMÉ(Ref(L))`. `janus inspect` calcule cette plage (deux recherches dichotomiques, car `Ref` et `PADMÉ∘Ref` sont croissantes). Pour un fichier de 512 Mio, elle s'étend sur environ 0,8 %.
+**Ce que la taille révèle à un tiers.** Toute la fuite tient en une plage : les longueurs de clair `L` compatibles avec une taille `F` sont celles qui vérifient `Ref(L) ≤ F ≤ PADMÉ(Ref(L))`. `janus inspect` calcule cette plage (deux recherches dichotomiques, car `Ref` et `PADMÉ∘Ref` sont croissantes). Pour un fichier de 512 Mio, elle s'étend sur environ 1,5 % avec la règle v0, et environ 3 % avec le seau de la v1 : l'observateur en apprend moins.
 
 Il existe une seconde fuite, minime : les tailles dont le reste vaut entre 1 et 16 ne sont jamais produites. Elles représentent 16 tailles sur 65 552, soit 0,024 %. Une telle taille prouve seulement que le fichier **n'est pas** un fichier Janus. À l'inverse, une taille valide ne prouve rien, puisque 99,98 % des tailles le sont.
 
