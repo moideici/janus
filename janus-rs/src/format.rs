@@ -174,16 +174,36 @@ pub fn capacite_cachee(l1: u64) -> u64 {
     }
 }
 
-/// Bornes [Ref, PADMÉ(Ref)] de la taille du fichier pour un leurre de `l1` octets.
-pub fn bornes_taille(l1: u64) -> (u64, u64) {
-    let reference = H as u64 + taille_chiffree(l1) + reserve(l1);
-    (reference, padme(reference))
+/// Taille minimale du fichier pour un leurre de `l1` octets : Ref = H + c(L₁) + Réserve(L₁).
+pub fn taille_reference(l1: u64) -> u64 {
+    H as u64 + taille_chiffree(l1) + reserve(l1)
 }
 
-/// F uniforme dans [Ref, PADMÉ(Ref)]. Toutes les tailles sont possibles en v1.
+/// Largeur − 1 du « seau » PADMÉ d'une taille alignée `x` : 2^(E−S) − 1, avec
+/// E = ⌊log2 x⌋ et S = ⌊log2 E⌋ + 1 (le masque de PADMÉ). Les seaux
+/// [x, x + masque_seau(x)] des valeurs alignées pavent les entiers.
+pub fn masque_seau(x: u64) -> u64 {
+    if x < 2 {
+        return 0;
+    }
+    let e = 63 - x.leading_zeros() as u64;
+    let s = 64 - e.leading_zeros() as u64;
+    (1u64 << (e - s)) - 1
+}
+
+/// Bornes [X, X + masque_seau(X)] de la taille du fichier, avec X = PADMÉ(Ref)
+/// (spec, § 6.2). Les deux bornes croissent avec `l1`.
+pub fn bornes_taille(l1: u64) -> (u64, u64) {
+    let x = padme(taille_reference(l1));
+    (x, x + masque_seau(x))
+}
+
+/// F uniforme dans tout le seau PADMÉ de Ref (docs/09, § 1) : F ne dépend de L₁
+/// qu'à travers PADMÉ(Ref), donc la fuite est exactement celle de PADMÉ, et les
+/// bits de poids faible de F restent uniformes (aucune signature de bourrage).
 pub fn tirer_taille(l1: u64) -> u64 {
-    let (reference, fmax) = bornes_taille(l1);
-    reference + alea::uniforme_u64_jusqua(fmax - reference)
+    let (x, fmax) = bornes_taille(l1);
+    x + alea::uniforme_u64_jusqua(fmax - x)
 }
 
 // ───────────────────────────────── erreurs ─────────────────────────────────

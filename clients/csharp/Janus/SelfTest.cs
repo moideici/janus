@@ -460,7 +460,8 @@ public static class SelfTest
         // Password.
         var f = JanusFile.Encrypt(Face.ForPassword(main, "correct horse"), []);
         long reference = JanusFile.HeaderSize + JanusFile.EncryptedFaceSize(main.Length) + JanusFile.Reserve(main.Length);
-        Check("password: file size in [Ref, PADME(Ref)]", f.Length >= reference && f.Length <= JanusFile.Padme(reference));
+        long bucket = JanusFile.Padme(reference);
+        Check("password: file size in the PADME bucket of Ref", f.Length >= bucket && f.Length <= bucket + JanusFile.BucketMask(bucket));
         Check("password: opens", Opens(f, main, x => JanusFile.DecryptWithPassword(x, "correct horse"u8)));
         Check("password: wrong password fails", !Opens(f, main, x => JanusFile.DecryptWithPassword(x, "correct horsf"u8)));
         Check("password: an identity fails", !Opens(f, main, x => JanusFile.DecryptWithIdentities(x, [foreign])));

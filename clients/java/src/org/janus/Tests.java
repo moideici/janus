@@ -455,7 +455,7 @@ public final class Tests {
         byte[] p = random(1000);
         byte[] pw = Bytes.ascii("correct horse");
         byte[] f = Janus.encrypt(Janus.Face.withPassword(p, pw), List.of(), rng);
-        check("file size within [Ref, PADME(Ref)]", sizeOk(f.length, p.length));
+        check("file size within the PADME bucket of Ref", sizeOk(f.length, p.length));
         checkOpens("password", () -> Janus.decryptWithPassword(f, pw), p);
         checkFails("password: wrong password fails", () -> Janus.decryptWithPassword(f, Bytes.ascii("correct horsf")));
 
@@ -555,7 +555,8 @@ public final class Tests {
 
     private static boolean sizeOk(long f, long l1) {
         long ref = Janus.H + Janus.encryptedSize(l1) + Janus.reserve(l1);
-        return f >= ref && f <= Janus.padme(ref);
+        long bucket = Janus.padme(ref); // spec § 6.2: F lies in the PADME bucket of Ref
+        return f >= bucket && f <= bucket + Janus.bucketMask(bucket);
     }
 
     private void checkRule(String name, Janus.Face main, List<Janus.Face> hidden) {

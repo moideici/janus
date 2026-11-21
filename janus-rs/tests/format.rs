@@ -39,7 +39,7 @@ fn aller_retour_tailles_limites() {
         let f = pour_alice(&clair);
         assert_eq!(ouvrir_alice(&f).unwrap(), clair, "longueur {n}");
         let (reference, fmax) = format::bornes_taille(n as u64);
-        assert!((reference..=fmax).contains(&(f.len() as u64)), "taille hors de [Ref, PADMÉ(Ref)]");
+        assert!((reference..=fmax).contains(&(f.len() as u64)), "taille hors du seau PADMÉ de Ref");
     }
 }
 
@@ -293,7 +293,7 @@ fn le_test_statistique_detecte_ml_kem_brut_mais_pas_janus() {
     eprintln!("χ² ML-KEM brut (10 bits) = {brut:.0} ; Kemeleon = {k_enc:.0} ; κ masqué = {k_masq:.0} ; fichiers = {k_fic:.0}");
 }
 
-/// Le tirage de taille doit couvrir [Ref, PADMÉ(Ref)] uniformément (§ 7).
+/// Le tirage de taille doit couvrir le seau PADMÉ de Ref uniformément (spec, § 6.2).
 #[test]
 fn tirage_de_taille_uniforme() {
     let (reference, fmax) = format::bornes_taille(14);

@@ -92,6 +92,16 @@ final class Janus {
         return (l + mask) & ~mask;
     }
 
+    /** Spec § 6.2: width − 1 of the PADME bucket of an aligned size x. */
+    static long bucketMask(long x) {
+        if (x < 2) {
+            return 0;
+        }
+        int e = 63 - Long.numberOfLeadingZeros(x);
+        int s = 31 - Integer.numberOfLeadingZeros(e) + 1;
+        return (1L << (e - s)) - 1;
+    }
+
     /** Uniform integer in [a, b], by rejection. */
     static long uniform(SecureRandom rng, long a, long b) {
         long range = b - a;                        // b − a + 1 values
@@ -184,7 +194,8 @@ final class Janus {
 
         // 1. Sizes and positions.
         long ref = H + encryptedSize(l1) + reserve(l1);
-        long fSize = uniform(rng, ref, padme(ref));
+        long bucket = padme(ref); // spec § 6.2: F is uniform in the whole PADME bucket
+        long fSize = uniform(rng, bucket, bucket + bucketMask(bucket));
         if (fSize > Integer.MAX_VALUE - 16) {
             throw JanusException.rule("file too large for this client (2 GiB)");
         }

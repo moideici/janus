@@ -71,6 +71,15 @@ export function padme(l: number): number {
   return Number((L + mask) & ~mask);
 }
 
+/** Spec § 6.2: width − 1 of the PADME bucket of an aligned size x. */
+export function bucketMask(x: number): number {
+  if (x < 2) return 0;
+  const X = BigInt(x);
+  const e = BigInt(X.toString(2).length - 1);
+  const s = BigInt(e.toString(2).length);
+  return Number((1n << (e - s)) - 1n);
+}
+
 // ---------------------------------------------------------------- inputs
 
 export type Recipients =
@@ -181,7 +190,8 @@ export function encrypt(main: Face, hidden: Face[] = []): Bytes {
 
   // 1. File size and offsets.
   const ref = H + faceSize(L1) + reserve(L1);
-  const F = uniformInt(ref, padme(ref));
+  const X = padme(ref);
+  const F = uniformInt(X, X + bucketMask(X)); // spec § 6.2: the whole PADME bucket
   const B = F - H;
   const offsets = [0];
   const hiddenSizes = hidden.map((f) => faceSize(f.plaintext.length));

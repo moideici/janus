@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 
 import { bech32mDecode, decodeIdentity, decodePublicKeyBytes, encodeIdentity, encodePublicKey, bech32mEncode, toWords } from './src/bech32m.ts';
 import { BASE_U, bigToBytesLE, elligatorMap, elligatorRepresentative, G_FULL_U, ladderUnclamped, randomFullScalar, x25519 } from './src/curve25519.ts';
-import { decrypt, encrypt, faceSize, H, JanusError, padme, reserve, SEVERAL_FACES, CANNOT_DECRYPT, type Face, type Credentials } from './src/format.ts';
+import { decrypt, encrypt, faceSize, H, JanusError, padme, bucketMask, reserve, SEVERAL_FACES, CANNOT_DECRYPT, type Face, type Credentials } from './src/format.ts';
 import { decodeCtxt, encodeCtxt } from './src/kemeleon.ts';
 import {
   identityFileText,
@@ -258,8 +258,8 @@ function face(plaintext: Bytes, r: { pass: string } | { to: Identity[] }): Face 
 }
 
 function checkSize(file: Bytes, l1: number): void {
-  const ref = H + faceSize(l1) + reserve(l1);
-  assert.ok(file.length >= ref && file.length <= padme(ref), `size ${file.length} not in [${ref}, ${padme(ref)}]`);
+  const x = padme(H + faceSize(l1) + reserve(l1)); // spec § 6.2: F lies in the PADME bucket of Ref
+  assert.ok(file.length >= x && file.length <= x + bucketMask(x), `size ${file.length} not in the bucket of ${x}`);
 }
 
 test('round trip: password', () => {

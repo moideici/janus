@@ -224,7 +224,8 @@ fn hypothese_janus(taille: u64, alea: &Alea) -> HypotheseJanus {
 }
 
 /// Longueurs de clair compatibles avec un fichier Janus v1 de taille `f` :
-/// toutes les L telles que Ref(L) ≤ f ≤ PADMÉ(Ref(L)) (03-deux-visages.md, § 5).
+/// toutes les L dont le seau de taille [X, X + masque(X)], X = PADMÉ(Ref(L)),
+/// contient f (spec, § 6.2). Les deux bornes croissent avec L.
 pub fn plage_clair_janus(f: u64) -> Option<(u64, u64)> {
 
     let reference = |l: u64| bornes_taille(l).0;
@@ -232,7 +233,7 @@ pub fn plage_clair_janus(f: u64) -> Option<(u64, u64)> {
     if reference(0) > f {
         return None;
     }
-    // L_max : la plus grande L avec Ref(L) ≤ f (Ref croît avec L).
+    // L_max : la plus grande L dont le seau commence au plus à f (borne croissante).
     let (mut bas, mut haut) = (0u64, f);
     while bas < haut {
         let m = bas + (haut - bas).div_ceil(2);
@@ -246,7 +247,7 @@ pub fn plage_clair_janus(f: u64) -> Option<(u64, u64)> {
     if plafond(l_max) < f {
         return None;
     }
-    // L_min : la plus petite L avec PADMÉ(Ref(L)) ≥ f (PADMÉ∘Ref croît aussi).
+    // L_min : la plus petite L dont le seau finit au moins à f (croissante aussi).
     let (mut bas, mut haut) = (0u64, l_max);
     while bas < haut {
         let m = bas + (haut - bas) / 2;

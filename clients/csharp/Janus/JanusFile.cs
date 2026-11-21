@@ -73,6 +73,15 @@ public static class JanusFile
         return (l + mask) & ~mask;
     }
 
+    /// <summary>Spec § 6.2: width − 1 of the PADME bucket of an aligned size <paramref name="x"/>.</summary>
+    public static long BucketMask(long x)
+    {
+        if (x < 2) return 0;
+        int e = 63 - System.Numerics.BitOperations.LeadingZeroCount((ulong)x);
+        int s = 32 - System.Numerics.BitOperations.LeadingZeroCount((uint)e);
+        return (1L << (e - s)) - 1;
+    }
+
     // ---- Primitives ----
 
     private static byte[] Hkdf(ReadOnlySpan<byte> ikm, ReadOnlySpan<byte> info)
@@ -128,7 +137,8 @@ public static class JanusFile
         // 1. File size and offsets.
         long l1 = main.Plaintext.Length;
         long reference = HeaderSize + EncryptedFaceSize(l1) + Reserve(l1);
-        long fileSize = (long)RandomUniform.UInt64InRange((ulong)reference, (ulong)Padme(reference));
+        long bucket = Padme(reference); // spec § 6.2: F is uniform in the whole PADME bucket
+        long fileSize = (long)RandomUniform.UInt64InRange((ulong)bucket, (ulong)(bucket + BucketMask(bucket)));
         long bodySize = fileSize - HeaderSize;
         var offsets = new long[faces.Count];
         offsets[0] = 0;

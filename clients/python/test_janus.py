@@ -424,7 +424,8 @@ class TestRoundTrips(unittest.TestCase):
 
     def check_size(self, data: bytes, l1: int):
         ref = container.H + container.face_size(l1) + container.reserve(l1)
-        self.assertTrue(ref <= len(data) <= container.padme(ref))
+        x = container.padme(ref)  # spec § 6.2: F lies in the PADME bucket of Ref
+        self.assertTrue(x <= len(data) <= x + container.bucket_mask(x))
 
     def test_password(self):
         f = encrypt(Face(b"hello", [Password(b"pw")]))

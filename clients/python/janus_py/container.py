@@ -97,6 +97,15 @@ def padme(length: int) -> int:
     return (length + mask) & ~mask
 
 
+def bucket_mask(x: int) -> int:
+    """Spec § 6.2: width − 1 of the PADME bucket of an aligned size x."""
+    if x < 2:
+        return 0
+    e = x.bit_length() - 1
+    s = e.bit_length()
+    return (1 << (e - s)) - 1
+
+
 # --------------------------------------------------------------------------- faces
 
 @dataclass(frozen=True)
@@ -198,7 +207,8 @@ def encrypt(main: Face, hidden: Sequence[Face] = ()) -> bytes:
     # 1. File size (§ 6.2) and offsets (§ 6.3).
     l1 = len(main.plaintext)
     ref = H + face_size(l1) + reserve(l1)
-    f_size = _uniform(ref, padme(ref))
+    x = padme(ref)
+    f_size = _uniform(x, x + bucket_mask(x))  # spec § 6.2: the whole PADME bucket
     body_size = f_size - H
     offsets = [0]
     if hidden:

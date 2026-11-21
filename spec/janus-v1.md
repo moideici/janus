@@ -284,7 +284,8 @@ Reserve(L1) = max(R_MIN, ⌈L1 / RHO⌉)       L1 = plaintext length of the main
 
 ```
 Ref = H + c(L1) + Reserve(L1)
-F   = uniform integer in [Ref, PADME(Ref)]
+X   = PADME(Ref)
+F   = uniform integer in [X, X + BucketMask(X)]
 B   = F − H                                 body size
 ```
 
@@ -297,9 +298,17 @@ PADME(L):
     S = ⌊log2 E⌋ + 1
     mask = 2^(E − S) − 1
     return (L + mask) & ~mask
+
+BucketMask(X):                              (the same mask, computed on X)
+    if X < 2: return 0
+    E = ⌊log2 X⌋
+    S = ⌊log2 E⌋ + 1
+    return 2^(E − S) − 1
 ```
 
 `F` depends only on the main face. Hidden faces do not change the file size.
+
+The *buckets* `[X, X + BucketMask(X)]` of the values `X` that PADME outputs tile the integers. `F` is drawn uniformly in the bucket of `PADME(Ref)`, so it depends on `L1` only through `PADME(Ref)`: the size leaks exactly what PADME leaks, and its low-order bits stay uniform, so the size carries no padding signature. Readers do not check this rule (any `F` with room for the faces opens), but encryptors MUST follow it. An earlier draft drew `F` uniformly in `[Ref, PADME(Ref)]`, which leaks more, because `F ≥ Ref` bounds `L1` from above: about 0.8 bit more mutual information and 3 to 4 bits more maximal leakage (docs/09, § 1).
 
 ### 6.3 Body layout
 
@@ -419,4 +428,5 @@ Plaintexts: main face byte `k` = `(31·k + 7) mod 256`; hidden face number `j` (
 
 ## Appendix A. Changes from earlier drafts
 
+- Before 21 November 2026, encryptors drew `F` uniformly in `[Ref, PADME(Ref)]` (§ 6.2). Such files still open.
 - The preview release v0.1.0-alpha used 2 tags (`H = 26 208`) and base64 key encoding. Its files do not open with this format. Its identity strings (`JANUS-SECRET-V0-` followed by base64url(seed ‖ SHA-256(prefix ‖ seed)[0:4])) MAY still be read until 1.0; the key pair is the same.
