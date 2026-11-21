@@ -4,6 +4,10 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), et les 
 
 ## [Non publié]
 
+## [0.2.0-alpha] — 2026-11-21
+
+Format **Janus v1**, candidat au gel. **Incompatible avec la v0.1.0-alpha** (voir « Modifié »).
+
 ### Ajouté
 - **Spécification normative en anglais** (`spec/janus-v1.md`), autonome : elle suffit pour écrire une autre implémentation.
 - **Quatre clients indépendants** (`clients/`) en Python, TypeScript, C# et Java, écrits à partir de la spécification seule, sans aucun téléchargement. Ils ouvrent tous les vecteurs, et les cinq implémentations s'ouvrent mutuellement leurs fichiers (`clients/interop.py`, 75 combinaisons sur 75). Ce sont des clients d'interopérabilité, pas en temps constant.

@@ -1,6 +1,6 @@
 # Licences des dépendances
 
-*Générée le 19 novembre 2026 à partir de `cargo metadata`, pour la version 0.1.0-alpha. Elle couvre les dépendances normales et de compilation, toutes plateformes confondues, mais pas les dépendances de test.*
+*Générée le 19 novembre 2026 à partir de `cargo metadata`, pour la version 0.1.0-alpha ; vérifiée inchangée pour la 0.2.0-alpha (21 novembre 2026). cargo-deny contrôle désormais les licences à chaque poussée. Elle couvre les dépendances normales et de compilation, toutes plateformes confondues, mais pas les dépendances de test.*
 
 **Bilan :** 65 crates, toutes sous licence permissive et compatibles avec la licence MIT de Janus.
 - La plupart sont proposées au choix sous MIT ou Apache-2.0.

@@ -64,7 +64,7 @@ jobs:
           mkdir -p "../dist/$nom"
           ext=""; [ "$RUNNER_OS" = "Windows" ] && ext=".exe"
           cp "target/release/janus$ext" "../dist/$nom/"
-          cp ../LICENSE ../README.md ../docs/licences-dependances.md "../dist/$nom/"
+          cp ../LICENSE ../README.md ../spec/janus-v1.md ../docs/licences-dependances.md "../dist/$nom/"
           # rpassword et rtoolbox sont sous Apache-2.0 seule : on joint le texte de la licence.
           cp "$(ls -d ~/.cargo/registry/src/*/rpassword-*/ | head -1)LICENSE-APACHE" "../dist/$nom/LICENSE-APACHE-2.0.txt"
           cd ../dist
