@@ -1,0 +1,356 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{microtype}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+\usepackage{xurl}
+\usepackage[hidelinks]{hyperref}
+\usepackage{cleveref}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\newcommand{\Adv}{\mathsf{Adv}}
+\newcommand{\Hdr}{\mathsf{H}}
+\newcommand{\RefSz}{\mathsf{Ref}}
+\newcommand{\padme}{\mathsf{PADME}}
+\newcommand{\bmask}{\mathsf{BucketMask}}
+\newcommand{\Res}{\mathsf{Reserve}}
+\newcommand{\HKDF}{\mathsf{HKDF}}
+\newcommand{\HMAC}{\mathsf{HMAC}}
+\newcommand{\AEAD}{\mathsf{AEAD}}
+\newcommand{\Argon}{\mathsf{Argon2id}}
+\newcommand{\SHAKE}{\mathsf{SHAKE256}}
+\newcommand{\SHA}{\mathsf{SHA3\text{-}256}}
+\newcommand{\Kem}{\mathsf{Kemeleon}}
+\newcommand{\Ell}{\mathsf{Elligator2}}
+\newcommand{\str}[1]{\texttt{"#1"}}
+\newcommand{\getsr}{\xleftarrow{\$}}
+\newcommand{\negl}{\mathsf{negl}}
+
+\title{Janus: Post-Quantum File Encryption with\\ Uniform Ciphertexts and Deniable Hidden Faces}
+\author{moideici\\ \small Independent \\ \small \url{https://github.com/moideici/janus}}
+\date{November 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We present Janus, a file encryption format and its implementation with three properties that, to our knowledge, no deployed file encryption tool offers together.
+(1) It is post-quantum hybrid: every public-key recipient uses X-Wing (ML-KEM-768 combined with X25519), and every password recipient uses Argon2id.
+(2) Every byte of a Janus file is indistinguishable from uniform randomness: there is no header field, no version, no algorithm identifier, the number and kind of recipients are hidden among 16 fixed-size slots, the X25519 ephemeral is hidden with Elligator~2, the ML-KEM ciphertext with Kemeleon, and the file size is padded.
+(3) A file has several \emph{faces}: it opens on a decoy with one credential and on up to three hidden faces with others, and every file has the same structure whether or not it hides anything, which gives plausible deniability against an adversary who has obtained the decoy credential.
+
+We give game-based proofs of indistinguishability and deniability, of key commitment and per-face integrity (with a bound of four candidates per partitioning-oracle query), and of active confidentiality, for which we show that strict IND-CCA is impossible with several faces and prove IND-RCCA instead.
+Writing these proofs exposed two flaws in an early version, both fixed: clamping the hidden X25519 ephemeral makes it distinguishable by an adversary able to compute discrete logarithms, and an unmasked Kemeleon encoding made indistinguishability rest on MLWE alone; we make it hybrid by masking the encoding with a stream derived from the X25519 secret.
+We machine-check, with CryptoVerif, that the resulting hidden KEM is IND-CCA along both of its paths; the check revealed that the X25519 path needs ciphertext second-preimage resistance of ML-KEM.
+We show that, for public-key faces, every proof can be carried out without random oracles along the ML-KEM path, and therefore holds against quantum adversaries.
+We compute exactly how much the file size leaks about the plaintext length, find that a natural randomised variant of PADM\'E leaks more than PADM\'E itself, and replace it with a ``bucket'' rule whose leakage equals that of PADM\'E exactly.
+Janus is specified in a self-contained document, implemented in Rust, and has four independent implementations written from the specification alone (Python, TypeScript, C\#, Java) that interoperate with the reference in all 75 combinations.
+Janus is a research prototype: it has not been audited, and these proofs have not yet been reviewed. We publish this paper to invite that review.
+\end{abstract}
+
+\section{Introduction}
+
+File encryption tools such as OpenPGP implementations and age~\cite{age} protect the confidentiality of a file well, but the encrypted file itself says a lot: which tool produced it, how many recipients it has, often who they are, and the plaintext size to within a few bytes. None of them is post-quantum by default today, and none helps a user who is \emph{forced} to decrypt a file, for instance at a border or during an investigation.
+
+Deniable encryption~\cite{CDNO97} addresses coercion: the user reveals a credential that opens an innocuous plaintext, and the adversary cannot tell whether another plaintext exists. Disk-level tools implement this with hidden volumes: VeraCrypt, and more recently Shufflecake~\cite{shufflecake}, which supports several hidden volumes. These work on whole disks or partitions, and their deniability is known to be fragile against operating-system traces~\cite{CzeskisEtAl08}. We are not aware of a deployed \emph{file} format that combines deniability with post-quantum hybrid encryption and fully uniform ciphertexts.
+
+\paragraph{Janus.} Janus encrypts a file to recipients given by passwords or by X-Wing~\cite{xwing} public keys. A Janus file is a fixed-size header followed by a body (\cref{fig:layout}). The header has four tags, a salt, and sixteen recipient slots, all of fixed size and all present in every file; unused parts are random. Each \emph{face} (a decoy, and up to three hidden faces) has its own file key, wrapped in one slot per recipient and bound to the header and the file size by one tag. Hidden faces live in a \emph{reserve} after the decoy, whose size depends only on the decoy.
+
+\begin{figure}[t]
+\centering
+\begin{tabular}{@{}llp{7.6cm}@{}}
+\toprule
+Offset & Size & Content \\
+\midrule
+0 & $4\times 32$ & tags $T_0,\dots,T_3$ ($\HMAC$-SHA-256) \\
+128 & 32 & salt (shared by all password recipients) \\
+160 & $16\times 1632$ & slots $E_0,\dots,E_{15}$: $r \| \kappa' \| W$ \\
+$\Hdr = 26\,272$ & $F-\Hdr$ & body: decoy at offset 0, hidden faces in the reserve, random elsewhere \\
+\bottomrule
+\end{tabular}
+\caption{Layout of a Janus v1 file. Every field has a fixed position and size; every byte not written for a face is uniformly random.}
+\label{fig:layout}
+\end{figure}
+
+\paragraph{Contributions.}
+\begin{itemize}
+\item \emph{A hidden hybrid KEM} (\cref{sec:kem}). We transmit X-Wing ciphertexts as uniform strings: the X25519 ephemeral is a ``dirty'' point $e\cdot B + L$ with $e$ uniform modulo $\ell$ and $L$ uniform in the 8-torsion, encoded by an Elligator~2 representative~\cite{elligator}; the ML-KEM ciphertext is encoded with Kemeleon~\cite{kemeleon}, then masked with $\SHAKE(\str{janus/v1/masque}\|ss_X\|ct_X)$. The mask makes uniformity hold if \emph{either} MLWE \emph{or} gap-DH holds.
+\item \emph{A multi-face format with deniability} (\cref{sec:format,sec:deni}), with a proof that a file with $k\le 3$ hidden faces is indistinguishable from a file with none, given the decoy credential.
+\item \emph{Integrity and active security} (\cref{sec:int}): key commitment (at most four file keys per file), per-face integrity, at most four passwords tested per partitioning-oracle query~\cite{partitioning}, and IND-RCCA~\cite{rcca}, together with an argument that strict IND-CCA is impossible with several tags.
+\item \emph{Machine-checked IND-CCA of the hidden KEM} (\cref{sec:cv}) along both its paths, with CryptoVerif~\cite{cryptoverif}, and a cofactor lemma that justifies the prime-order abstraction. The check found a missing hypothesis: ciphertext second-preimage resistance (C2PRI) of ML-KEM on the X25519 path.
+\item \emph{Security against quantum adversaries} (\cref{sec:pq}): for key faces, every random-oracle step of the ML-KEM path can be replaced by a standard-model assumption; for passwords, Argon2id costs half the entropy.
+\item \emph{Exact size leakage} (\cref{sec:size}): we compute the mutual information and the maximal leakage~\cite{maxleak} of the file size, show that sampling the size uniformly in $[\RefSz,\padme(\RefSz)]$ leaks more than PADM\'E~\cite{purbs}, and adopt a bucket rule that leaks exactly what PADM\'E leaks.
+\item \emph{Implementation and validation} (\cref{sec:impl}): a Rust implementation, a self-contained specification, four independent implementations written from it, test vectors, coverage-guided fuzzing, and constant-time testing with dudect~\cite{dudect}.
+\end{itemize}
+
+\paragraph{Status.} Janus is a research prototype. Its format is frozen as a candidate, its code has not been audited, and its proofs (long versions in French in the repository) have not been reviewed by anyone else. \emph{This is the main reason for this paper.}
+
+\section{Building blocks}
+\label{sec:prelim}
+
+\paragraph{Notation.} $\|$ is concatenation, $\mathsf{BE64}(x)$ the 8-byte big-endian encoding, $U_n$ a uniform string of $n$ bytes. $\ell = 2^{252}+27742317777372353535851937790883648493$ is the order of the prime subgroup of Curve25519, whose full group has order $8\ell$.
+
+\paragraph{Primitives.} $\HKDF(\mathit{ikm},\mathit{info})$ is HKDF-SHA-256 with an empty salt and 32-byte output; $\HMAC$ is HMAC-SHA-256; $\AEAD$ is ChaCha20-Poly1305; $\Argon$ uses 64~MiB, 3 passes, parallelism 4~\cite{rfc9106}. Domain-separation labels are the ASCII strings \str{janus/v1/\dots}; there is no version field, and the \texttt{v1} in the labels is the version.
+
+\paragraph{X-Wing.} An identity is a 32-byte seed expanded with SHAKE256 into an ML-KEM-768 key pair $(ek_M, dk_M)$ and an X25519 secret $sk_X$; $pk = ek_M\| pk_X$. The combiner is
+\[ ss = \SHA(ss_M\|ss_X\|ct_X\|pk_X\|\mathsf{label}); \]
+it does not hash $ct_M$, which X-Wing justifies with properties of ML-KEM~\cite{xwing}.
+
+\paragraph{Elligator 2 and Kemeleon.} Elligator~2~\cite{elligator} maps a 254-bit string to a Montgomery $u$-coordinate; about half the points have representatives, two each, and with two random high bits a uniform point yields a (statistically) uniform 32-byte string. Kemeleon~\cite{kemeleon} maps an ML-KEM ciphertext to a uniform-looking string by sampling a uniform preimage of each compressed coefficient and encoding each vector as a large integer padded uniformly up to $2^{3072}$; the default variant never fails and gives 1536 bytes for ML-KEM-768.
+
+\section{The hidden KEM}
+\label{sec:kem}
+
+\begin{algorithm}[t]
+\caption{Hidden X-Wing encapsulation to $pk = ek_M\|pk_X$.}
+\label{alg:encaps}
+\begin{algorithmic}[1]
+\Repeat
+  \State $s \getsr [0, 8\ell)$ \Comment{equivalently $e\getsr\mathbb{Z}_\ell$, $L\getsr T_8$, $P=e\cdot B+L$}
+  \State $ct_X \gets u(s\cdot G)$ for a fixed point $G$ of order $8\ell$
+\Until{$ct_X$ has an Elligator~2 representative}
+\State $r \gets$ a uniformly chosen representative of $ct_X$, with two uniform high bits
+\State $ss_X \gets u(s\cdot pk_X)$ \Comment{unclamped ladder}
+\State $(ss_M, ct_M) \gets \mathsf{ML\text{-}KEM.Encaps}(ek_M)$
+\State $ss \gets \SHA(ss_M\|ss_X\|ct_X\|pk_X\|\mathsf{label})$
+\State $\kappa' \gets \Kem.\mathsf{Encode}(ct_M) \oplus \SHAKE(\str{janus/v1/masque}\|ss_X\|ct_X)$
+\State \Return $(ss, r\|\kappa')$
+\end{algorithmic}
+\end{algorithm}
+
+The recipient computes $ct_X = \Ell(r)$, $ss_X = \mathsf{X25519}(sk_X, ct_X)$, unmasks $\kappa'$, decodes $ct_M$ (decoding never fails), decapsulates (ML-KEM never fails, by implicit rejection), and combines. Since the clamped scalar of $sk_X$ is a multiple of 8, it annihilates the torsion component of $P$ and the recipient obtains $s\cdot pk_X$.
+
+\paragraph{Why a dirty point, and why uniform modulo $\ell$.} Points of the prime-order subgroup are a $1/8$ fraction of all points, so representatives of such points are distinguishable; hence the torsion component~$L$. Our first implementation, like the library it relied on, drew a \emph{clamped} scalar. Our deniability proof needed the scalar to be uniform modulo $\ell$, and this is not a technicality: a clamped scalar is $2^{254}+8k$ with $k<2^{251}$, so it covers only half of $\mathbb{Z}_\ell$, and an adversary who can compute discrete logarithms (a quantum adversary) distinguishes it with advantage $1/2$ per ciphertext. Since deniability should outlive X25519, we draw $e$ uniformly modulo $\ell$ and compute the Elligator inverse map ourselves on arbitrary points, in constant time, with field arithmetic from fiat-crypto.
+
+\paragraph{Why a mask.} Without the mask, the uniformity of $\kappa$ rests on MLWE alone (through Kemeleon), so the deniability of a file would fall with ML-KEM even if X25519 stood. The mask depends only on $ss_X$ and $ct_X$; this keeps the IND-CCA simulation possible on the X25519 path, since a reduction can sample the mask for each $ct_X$ without knowing $sk_X$ (\cref{sec:int}).
+
+\section{The format}
+\label{sec:format}
+
+\paragraph{Slots and tags.} A face has a file key $K\getsr U_{32}$, a start offset $d$ and a plaintext length $l$. For each recipient at slot index $i$,
+\[ W = \AEAD\big(k_i, 0^{12}, K\|\mathsf{BE64}(d)\|\mathsf{BE64}(l)\big), \]
+where the wrapping key is
+\begin{itemize}
+\item $k_i = \HKDF(ss, \str{janus/v1/emballage/xwing}\|i)$ for a public key, and
+\item $k_i = \HKDF(A, \str{janus/v1/emballage/mdp}\|i)$, with $A = \Argon(\mathit{pw},\mathit{salt})$, for a password.
+\end{itemize}
+The face's tag is
+\[
+T = \HMAC\big(K_{\mathsf{hdr}},\ \mathsf{BE64}(F)\|\mathsf{BE64}(d)\|\mathsf{BE64}(l)\|\mathit{salt}\|E_0\|\dots\|E_{15}\big),
+\]
+with $K_{\mathsf{hdr}} = \HKDF(K,\str{janus/v1/entete})$,
+written at a uniformly random one of the four tag positions. Slot positions are a uniform permutation of the 16 slots. The face body is STREAM~\cite{stream} with ChaCha20-Poly1305 over 64~KiB blocks, key $\HKDF(K,\str{janus/v1/corps})$, nonce $0^3\|\mathsf{BE64}(j)\|\mathsf{last}$.
+
+\paragraph{Sizes.} With $c(l) = l + 16\lceil l/2^{16}\rceil$ (at least one block) and $\Res(L_1) = \max(2^{16}, \lceil L_1/16\rceil)$, let $\RefSz = \Hdr + c(L_1) + \Res(L_1)$. The file size $F$ is drawn uniformly in the PADM\'E bucket of $\RefSz$ (\cref{sec:size}); it depends only on the decoy. Hidden faces must fit in the reserve; they are placed in a random order, at offsets drawn from sorted uniform values in the free space, so that their positions depend only on randomness and the decoy.
+
+\paragraph{Opening.} The opener tries all 16 slots (and every identity), and for \emph{every} attempt computes the candidate tag, with a zero payload when unwrapping failed, and compares it in constant time with all four tags. Valid attempts are deduplicated on the triple $(K,d,l)$; zero triples give the single error ``cannot decrypt'', more than one a distinct error that only the holder of several faces' credentials, or a maliciously built file, can trigger.
+
+\section{Indistinguishability and deniability}
+\label{sec:deni}
+
+\begin{definition}[DENI]
+In game $\mathsf{DENI}_b$, the challenger creates $n_2$ honest identities (or samples a password of min-entropy $h$). The adversary chooses the decoy plaintext $M_1$, the decoy recipients (possibly malicious keys, or any password), the hidden plaintext $M_2$ subject to the capacity constraint, and receives the file encrypted with the hidden face if $b=1$ and without it if $b=0$. It has the decoy credentials and access to all random oracles.
+\end{definition}
+
+\begin{theorem}[Deniability]
+\label{thm:deni}
+For every adversary making $q_H$ hash queries and $q_A$ Argon2id queries,
+\begin{align*}
+\Adv^{\mathsf{DENI}} \le{}& q_A/2^h + n_2\big(\min(\Adv^{\mathsf{MLWE}} + \varepsilon_K,\ \Adv^{\mathsf{gapDH}}) + \varepsilon_E\big)\\
+&+ n_2\,\Adv^{\mathsf{IND\$}}_{\AEAD} + \Adv^{\mathsf{PRF}}_{\HMAC} + \Adv^{\mathsf{IND\$}}_{\mathsf{STREAM}} + (n_2+2)\,q_H/2^{256},
+\end{align*}
+where the first term applies only to a password hidden face, $\varepsilon_K$ is the statistical distance of Kemeleon and $\varepsilon_E\approx 2^{-250}$ that of Elligator~2 on uniform points. With $k\le 3$ hidden faces the bound is multiplied by~$k$.
+\end{theorem}
+
+\begin{proof}[Proof sketch]
+A sequence of games replaces, one by one, everything the hidden face wrote by uniform randomness. ($G_1$) The hidden password becomes a uniform key. ($G_2$) For each hidden recipient, $ss$ and $\kappa'$ become uniform \emph{together}, through one of two paths: an MLWE reduction that builds the X25519 part itself (so it knows the mask) and uses IND-CPA of ML-KEM and the pseudorandomness of Kemeleon; or a gap-DH reduction that builds the ML-KEM part itself, embeds the DH challenge after adding a random torsion point, and observes that $ss$ and the mask are two random-oracle outputs on $ss_X$. ($G_3$) Since the point is now independent of everything else, its representative is uniform (statistically). ($G_5$--$G_7$) The wraps, the tag and the stream become uniform under uniform, unseen keys. The decoy is produced identically in both worlds; the size, the slot permutation and the tag placement have the same distribution; a block of randomness at a random offset inside randomness is randomness.
+\end{proof}
+
+A third party without any credential is a special case: the whole file is then indistinguishable from $U_F$ (IND\$), under the same hybrid assumption.
+
+\section{Integrity and active security}
+\label{sec:int}
+
+\begin{theorem}[Commitment and consistency]
+For any file $f$, possibly built by an adversary knowing all keys, each tag position accepts at most one triple $(K,d,l)$ except with probability $\Adv^{\mathsf{CR}}_{\mathsf{SHA\text{-}256}}$. Hence a file opens on at most four file keys, and two recipients who validate the same tag read the same plaintext.
+\end{theorem}
+
+The tag covers the file size and the whole header except the tags, which makes it a key-committing MAC on the face description even though ChaCha20-Poly1305 is not key-committing~\cite{salamanders,keycommit}. It does not cover the other tags or the body outside the face, by design: this is where the other faces live. Two consequences are inherent to deniability: a malicious author can show different contents to recipients placed in different faces (``invisible salamanders''~\cite{salamanders}, here bounded to four contents), and a third party can erase a hidden face without the decoy noticing.
+
+\begin{theorem}[No partitioning oracle]
+Whatever the file, the outcome of an opening (success or failure) depends on the password through at most four candidates, one per tag, except with probability $\Adv^{\mathsf{CR}}_{\mathsf{SHA\text{-}256}}$.
+\end{theorem}
+
+\paragraph{Why not IND-CCA.} Given a challenge file and the decoy credential, an adversary can rewrite any byte outside the decoy face (another tag, the reserve) and submit the result: it opens on the same decoy plaintext. Strict IND-CCA forbids this, and no multi-face format with independent tags can avoid it. The right notion is IND-RCCA~\cite{rcca}, where the decryption oracle answers ``test'' on ciphertexts that decrypt to either challenge plaintext.
+
+\begin{theorem}[IND-RCCA]
+\label{thm:rcca}
+For an adversary making $q_O$ opening queries, with $n$ honest recipients in the challenge face,
+\begin{align*}
+\Adv^{\mathsf{RCCA}} \le{}& n\min\!\big(\Adv^{\mathsf{IND\text{-}CCA}}_{\mathsf{ML\text{-}KEM}} + \Adv^{\mathsf{MLWE}} + \varepsilon_K,\ \Adv^{\mathsf{gapDH}}\big) + (q_A + 4q_O)/2^h + n\,\varepsilon_E \\
+&+ n\big(\Adv^{\mathsf{IND\$}}_{\AEAD} + q_O\,\Adv^{\mathsf{INT\text{-}CTXT}}_{\AEAD}\big) + q_O\big(\Adv^{\mathsf{MAC}}_{\HMAC} + \Adv^{\mathsf{INT\text{-}CTXT}}_{\mathsf{STREAM}}\big) \\
+&+ \Adv^{\mathsf{CR}}_{\mathsf{SHA\text{-}256}} + \Adv^{\mathsf{PRF}}_{\HMAC} + \Adv^{\mathsf{IND\$}}_{\mathsf{STREAM}} + O\big(q_H(q_O+n)/2^{256}\big).
+\end{align*}
+\end{theorem}
+
+The difficult step is to answer openings without the honest secret keys. On the ML-KEM path the reduction keeps $sk_X$ and uses the ML-KEM decapsulation oracle. On the X25519 path it keeps $dk_M$, and since $ss'_X$ is determined by $ct'_X$, it samples the mask and the combiner output for each submitted $ct'_X$ in two tables, answering the adversary's own hash queries consistently with a DDH oracle. This works precisely because the mask depends on $ct_X$ and $ss_X$ only. A practical caveat follows from RCCA: a streaming decryption that outputs blocks before the last one is verified must make its caller discard all output on failure.
+
+\section{The hidden KEM is IND-CCA, machine-checked}
+\label{sec:cv}
+
+We isolate the hidden KEM, with ciphertexts taken \emph{after} decoding the encodings: a ciphertext is $(ct_X,\kappa')$. The encodings are many-to-one (two roots and two high bits for Elligator~2, several integers per vector for Kemeleon); changing an encoding without changing the decoded ciphertext yields the same key, a benign malleability that IND-RCCA tolerates (\cref{thm:rcca}).
+
+\begin{theorem}[Hidden KEM]
+\label{thm:kem}
+The hidden KEM with decoded ciphertexts is IND-CCA, with advantage at most the minimum of
+\begin{itemize}
+\item $2\Adv^{\mathsf{PRF}}_{\SHA} + 6N_d P_{\mathsf{ctxtcoll}} + 2\Adv^{\mathsf{IND\text{-}CCA2}}_{\mathsf{ML\text{-}KEM}}$ (ML-KEM path), where $\SHA$ is a PRF keyed by $ss_M$, and the adversary is \emph{given} $sk_X$;
+\item $2\Adv^{\mathsf{gapDH}} + 4\cdot 2^{-126} + O\big((q_H+N_d)P_{\mathsf{coll}}\big) + 2q_H N_d 2^{-12288}$ (X25519 path), in the random-oracle model, assuming C2PRI of ML-KEM, where the adversary can decapsulate ML-KEM ciphertexts itself.
+\end{itemize}
+\end{theorem}
+
+Both bounds are produced by CryptoVerif~2.13~\cite{cryptoverif}, which proves the secrecy of the challenge key in the presence of a decapsulation oracle automatically, in both models (repository, \texttt{preuves/cryptoverif/}). The models represent the masking and the X-Wing combiner exactly as specified; they abstract the curve by a prime-order group and the encodings by the identity.
+
+\paragraph{C2PRI.} Our first model of the X25519 path assumed ML-KEM \emph{completely} broken, and CryptoVerif failed to conclude, for a good reason. Because the combiner does not hash $ct_M$, an adversary that finds $ct'_M\neq ct_M$ with the same shared secret can keep $ct_X$, change $\kappa'$ so that it decodes to $ct'_M$, and obtain the challenge key from a different ciphertext. The X25519 path therefore needs ciphertext second-preimage resistance of ML-KEM. ML-KEM has it: with the implicit-rejection Fujisaki-Okamoto transform, a valid ciphertext determines the message by re-encryption and an invalid one yields $J(z\|c)$, so a collision requires a collision of SHA3 or SHAKE, independently of MLWE. X-Wing relies on the same property~\cite{xwing}. IND-RCCA of the file is unaffected, since such a collision would make the oracle answer ``test''.
+
+\begin{lemma}[Cofactor]
+\label{lem:cofactor}
+Let $\pi(P) = (8^{-1}\bmod\ell)\cdot(8P)$ be the projection onto $\langle B\rangle$. For every X25519 secret with clamped scalar $s$ and every point $P$ of Curve25519, $\mathsf{X25519}(s, u(P)) = u(s\cdot\pi(P))$.
+\end{lemma}
+
+\begin{proof}
+The clamped scalar is a multiple of 8, so it annihilates the 8-torsion: $sP = s\pi(P)$. X25519 depends only on $u$, which is the same for $\pm P$.
+\end{proof}
+
+Hence the challenge $P^\ast = eB + L$ gives an ordinary Diffie-Hellman value $e\cdot pk_X$ in $\langle B\rangle$, and decapsulation queries reduce to DDH queries on $\pi(P')$ in the prime-order group. Elligator~2 only outputs points of the curve, never of its twist, which rules out invalid-curve inputs. The non-uniformity of clamped keys is the $2^{-126}$ term above.
+
+\section{Quantum adversaries}
+\label{sec:pq}
+
+Our proofs use random oracles, and a quantum adversary can query hash functions in superposition, where the classical techniques of observing and programming queries no longer apply directly. Against such an adversary the X25519 path is void anyway; we show that the ML-KEM path of every proof avoids random oracles entirely (\cref{tab:pq}).
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}p{4.4cm}p{2.2cm}p{7.4cm}@{}}
+\toprule
+Step & Classical proof & Standard-model replacement \\
+\midrule
+Combiner $\SHA(ss_M\|\dots)$ & random oracle & $\SHA$ is a PRF keyed by $ss_M$~\cite{xwing} \\
+Mask $\SHAKE(\dots\|ss_X\|ct_X)$ & random oracle & none needed: the reduction knows $ss_X$ \\
+$\HKDF(ss,\cdot)$, $\HKDF(K,\cdot)$ & random oracle & HMAC is a PRF and a dual PRF~\cite{dualprf} \\
+ML-KEM & --- & IND-CCA of ML-KEM, established in the QROM~\cite{hhk17,bhhhp19} \\
+Kemeleon & --- & MLWE \\
+Elligator~2 & --- & statistical \\
+$\Argon$ & random oracle & \emph{none}: needed for passwords \\
+\bottomrule
+\end{tabular}
+\caption{Random-oracle steps of the ML-KEM path and their standard-model replacements.}
+\label{tab:pq}
+\end{table}
+
+\begin{theorem}[Post-quantum, key faces]
+Restricted to the ML-KEM path, \cref{thm:deni,thm:rcca,thm:kem} and the integrity theorems hold in the standard model under IND-CCA of ML-KEM-768, MLWE, $\SHA$ as a PRF keyed by $ss_M$, HMAC-SHA-256 as a PRF and dual PRF, ChaCha20 as a PRF, and collision resistance of SHA-256. The reductions are straight-line simulations without rewinding.
+\end{theorem}
+
+The CryptoVerif model of the ML-KEM path (\cref{sec:cv}) contains no random oracle. For password faces, Argon2id must remain a random oracle; with the one-way-to-hiding lemma~\cite{o2h} the first term of \cref{thm:deni} becomes $2(q_A+1)2^{-h/2}$, matching Grover search~\cite{grover}: a password of $h$ bits of entropy offers about $h/2$ bits against a quantum adversary, although each query would require evaluating a 64~MiB memory-hard function in superposition. Key commitment rests on collisions of SHA-256, for which generic quantum algorithms~\cite{bht} need about $2^{85}$ queries.
+
+\section{Exact size leakage}
+\label{sec:size}
+
+The size $F$ depends only on the decoy length $L$. We measure what it reveals by the mutual information $I(L;F)$ and by the maximal leakage $\log_2\sum_F\max_L P(F\mid L)$~\cite{maxleak}, which bounds the gain of an adversary guessing any function of $L$ and does not depend on the distribution of $L$. Both bounds of the sampling interval are non-decreasing in $L$, so the set of lengths compatible with a size is an interval moving with $F$, and both quantities can be computed \emph{exactly} in a single sweep, even over $2^{30}$ lengths.
+
+PADM\'E~\cite{purbs} rounds $\RefSz$ up to $X = \padme(\RefSz)$, whose low-order bits are zero, a recognisable pattern. A natural fix is to draw $F$ uniformly in $[\RefSz, \padme(\RefSz)]$; this is what Janus did until our analysis. It leaks more than PADM\'E, because $F\ge\RefSz(L)$ bounds $L$ from above (\cref{tab:size}).
+
+We now draw $F$ uniformly in the \emph{bucket} $[X, X+\bmask(X)]$, where $\bmask(X) = 2^{E-S}-1$ with $E=\lfloor\log_2 X\rfloor$ and $S=\lfloor\log_2 E\rfloor+1$ is PADM\'E's mask computed on $X$.
+
+\begin{proposition}
+With the bucket rule, $I(L;F) = I(L;\padme(\RefSz(L)))$, and the maximal leakage equals that of PADM\'E.
+\end{proposition}
+
+\begin{proof}
+The buckets of the values that PADM\'E outputs tile the integers, so $F$ determines $X$; given $X$, $F$ is uniform on the bucket independently of $L$. Thus $L\to X\to F$ is a Markov chain with $X$ a function of $F$, giving the mutual information. For maximal leakage, $P(F\mid L) = 1/|\mathrm{bucket}(X)|$ on the bucket, so $\sum_F\max_L P(F\mid L)$ is the number of reachable values of $X$.
+\end{proof}
+
+The low-order bits of $F$ are uniform, so the size carries no padding signature. The cost is a larger padding.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{@{}lrcccrr@{}}
+\toprule
+$L$ uniform in & $\log_2 N$ & $[\RefSz,\padme(\RefSz)]$ & PADM\'E & bucket & \multicolumn{2}{c}{padding, mean (max)} \\
+ & & $I$ / max & $I$ / max & $I$ / max & interval & bucket \\
+\midrule
+$[0, 64\,\text{KiB})$ & 16.0 & 5.46 / 7.76 & 4.65 / 4.75 & 4.65 / 4.75 & 0.57\% (3.1) & 2.30\% (6.25) \\
+$[1, 16)\,\text{MiB}$ & 23.9 & 7.44 / 10.58 & 6.61 / 7.01 & 6.61 / 7.01 & 0.56\% (3.1) & 2.25\% (6.25) \\
+$[512\,\text{MiB}, 1\,\text{GiB})$ & 29.0 & 5.81 / 9.11 & 4.97 / 5.04 & 4.97 / 5.04 & 0.56\% (3.1) & 2.24\% (6.25) \\
+$[0, 1\,\text{GiB})$ & 30.0 & 7.80 / 12.45 & 6.97 / 8.78 & 6.97 / 8.78 & 0.56\% (3.1) & 2.24\% (6.25) \\
+\bottomrule
+\end{tabular}
+\caption{Leakage of the file size about the decoy length, in bits (mutual information / maximal leakage), computed exactly, and padding overhead relative to $\RefSz$ (reserve excluded).}
+\label{tab:size}
+\end{table}
+
+\section{Implementation and validation}
+\label{sec:impl}
+
+\paragraph{Reference implementation.} The Rust implementation streams files with bounded memory, encrypts STREAM blocks in parallel, and offers in-memory opening (nothing is written before everything is verified). Apart from one small module that locks secrets in memory with \texttt{mlock}/\texttt{VirtualLock}, it contains no \texttt{unsafe} code. On a 16-thread laptop, opening a header takes 8.8~ms with a key (16 slots, constant-time Kemeleon decoding) and about 125~ms with a password (dominated by Argon2id); encrypting and decrypting 2~GiB end to end take 2.3 and 2.2~s with 42~MiB of memory. These measurements predate the bucket rule, which adds about 1.7\% of size on average.
+
+\paragraph{Specification and independent implementations.} A self-contained specification describes the format to the byte. Four clients (Python, TypeScript, C\#, Java) were written \emph{from the specification alone}, without reading the Rust code and without downloading any library (the C\# and Java clients implement ML-KEM, Keccak, Argon2id and, in C\#, ChaCha20-Poly1305 themselves, validated by known-answer tests). All four open every test vector, and every one of the five implementations opens the files of every other one, for passwords, keys and a decoy with two hidden faces (75 of 75 combinations, checked in continuous integration). Their implementers' feedback sharpened the specification (full X-Wing vector, decoding of $pk_X$, complete rules).
+
+\paragraph{Testing.} Coverage-guided fuzzing (cargo-fuzz with AddressSanitizer) runs nightly on six targets, including opening arbitrary files, mutating valid files (where the property is that an opening either fails or returns \emph{exactly} the original decoy), key decoding, Kemeleon, the Elligator inverse on arbitrary points, and the file inspector; no crash was found. dudect~\cite{dudect} detects no timing leak in Kemeleon, the Elligator inverse, decapsulation and opening, and does detect a deliberately leaky control. A $\chi^2$ homogeneity test on what the constrained adversary cannot open finds no difference between files with one and three hidden faces ($p = 0.58$).
+
+\paragraph{Releases.} The Linux binary is reproducible bit for bit, and release files carry Sigstore build-provenance attestations.
+
+\section{Limitations and open problems}
+\label{sec:limits}
+
+Deniability is a property of the file, not of the system: it does not cover operating-system traces, or an adversary who sees several versions of the same file. A Janus file costs a fixed 26~KiB header, a reserve of at least 64~KiB and $L/16$, and the bucket padding; it is meant for archives that must withstand coercion, not as a replacement for age on small files. Password faces are only as deniable as the hidden password is strong. Our proofs are on paper, except for the hidden KEM; a mechanised proof of the whole file (four tags, reserve, STREAM) remains to be done. Above all, \emph{none of this has been reviewed}; we would be grateful for any review of the construction, the proofs and the code, and for reports of distinguishers between files with and without hidden faces.
+
+\section*{Availability}
+Specification, code, proofs (in French), CryptoVerif models, test vectors and the four clients: \url{https://github.com/moideici/janus} (MIT licence). Documentation: \url{https://docs.moideici.tech/janus/}.
+
+\section*{Acknowledgements}
+The reflection on the ideas and the implementation of this work, including the design, the proofs, the code and the text, were carried out with the help of an AI assistant, Claude Opus~5.5 (Anthropic). Any error remains the author's responsibility, and independent review is all the more necessary.
+
+\begin{thebibliography}{99}
+\bibitem{age} F.~Valsorda. \emph{The age file encryption format}, \url{https://age-encryption.org/v1}.
+\bibitem{CDNO97} R.~Canetti, C.~Dwork, M.~Naor, R.~Ostrovsky. Deniable encryption. CRYPTO 1997.
+\bibitem{shufflecake} E.~Anzuoni, T.~Gagliardoni. Shufflecake: plausible deniability for multiple hidden filesystems on Linux. ACM CCS 2023.
+\bibitem{CzeskisEtAl08} A.~Czeskis, D.~J.~St.~Hilaire, K.~Koscher, S.~D.~Gribble, T.~Kohno, B.~Schneier. Defeating encrypted and deniable file systems: TrueCrypt v5.1a and the case of the tattling OS and applications. HotSec 2008.
+\bibitem{xwing} M.~Barbosa, D.~Connolly, J.~D.~Duarte, A.~Kaiser, P.~Schwabe, K.~Varner, B.~Westerbaan. X-Wing: the hybrid KEM you've been looking for. IACR Communications in Cryptology, 2024; and draft-connolly-cfrg-xwing-kem.
+\bibitem{elligator} D.~J.~Bernstein, M.~Hamburg, A.~Krasnova, T.~Lange. Elligator: elliptic-curve points indistinguishable from uniform random strings. ACM CCS 2013.
+\bibitem{kemeleon} F.~G\"unther, D.~Stebila, S.~Veitch. Obfuscated key exchange. ACM CCS 2024; and draft-irtf-cfrg-kemeleon-02.
+\bibitem{partitioning} J.~Len, P.~Grubbs, T.~Ristenpart. Partitioning oracle attacks. USENIX Security 2021.
+\bibitem{rcca} R.~Canetti, H.~Krawczyk, J.~B.~Nielsen. Relaxing chosen-ciphertext security. CRYPTO 2003.
+\bibitem{cryptoverif} B.~Blanchet. A computationally sound mechanized prover for security protocols. IEEE Transactions on Dependable and Secure Computing, 2008.
+\bibitem{maxleak} I.~Issa, A.~B.~Wagner, S.~Kamath. An operational approach to information leakage. IEEE Transactions on Information Theory, 2020.
+\bibitem{purbs} K.~Nikitin, L.~Barman, W.~Lueks, M.~Underwood, J.-P.~Hubaux, B.~Ford. Reducing metadata leakage from encrypted files and communication with PURBs. PETS 2019.
+\bibitem{dudect} O.~Reparaz, J.~Balasch, I.~Verbauwhede. Dude, is my code constant time? DATE 2017.
+\bibitem{rfc9106} A.~Biryukov, D.~Dinu, D.~Khovratovich, S.~Josefsson. Argon2 memory-hard function for password hashing and proof-of-work applications. RFC 9106, 2021.
+\bibitem{stream} V.~T.~Hoang, R.~Reyhanitabar, P.~Rogaway, D.~Viz\'ar. Online authenticated-encryption and its nonce-reuse misuse-resistance. CRYPTO 2015.
+\bibitem{salamanders} Y.~Dodis, P.~Grubbs, T.~Ristenpart, J.~Woodage. Fast message franking: from invisible salamanders to encryptment. CRYPTO 2018.
+\bibitem{keycommit} A.~Albertini, T.~Duong, S.~Gueron, S.~K\"olbl, A.~Luykx, S.~Schmieg. How to abuse and fix authenticated encryption without key commitment. USENIX Security 2022.
+\bibitem{dualprf} M.~Backendal, M.~Bellare, F.~G\"unther, M.~Scarlata. When messages are keys: is HMAC a dual-PRF? CRYPTO 2023.
+\bibitem{hhk17} D.~Hofheinz, K.~H\"ovelmanns, E.~Kiltz. A modular analysis of the Fujisaki-Okamoto transformation. TCC 2017.
+\bibitem{bhhhp19} N.~Bindel, M.~Hamburg, K.~H\"ovelmanns, A.~H\"ulsing, E.~Persichetti. Tighter proofs of CCA security in the quantum random oracle model. TCC 2019.
+\bibitem{o2h} A.~Ambainis, M.~Hamburg, D.~Unruh. Quantum security proofs using semi-classical oracles. CRYPTO 2019.
+\bibitem{grover} L.~K.~Grover. A fast quantum mechanical algorithm for database search. STOC 1996.
+\bibitem{bht} G.~Brassard, P.~H{\o}yer, A.~Tapp. Quantum cryptanalysis of hash and claw-free functions. LATIN 1998.
+\end{thebibliography}
+
+\end{document}

@@ -37,6 +37,7 @@ cargo build --release
 | [`spec/janus-v1.md`](spec/janus-v1.md) | **La spécification normative du format, en anglais** : tout ce qu'il faut pour écrire une autre implémentation |
 | [`clients/`](clients/README.md) | Quatre implémentations indépendantes écrites à partir de la spécification seule (Python, TypeScript, C#, Java), et le test d'interopérabilité croisée |
 | [`docs/`](docs/) | La conception et les preuves, de la cartographie au plan de release (voir ci-dessous) |
+| [`article/`](article/README.md) | L'article en anglais pour IACR ePrint (LaTeX et PDF), qui présente Janus aux cryptographes pour obtenir une relecture |
 | [`preuves/cryptoverif/`](preuves/cryptoverif/README.md) | Les preuves vérifiées par machine (CryptoVerif) : le KEM caché, par ses deux chemins |
 
 ### Documents

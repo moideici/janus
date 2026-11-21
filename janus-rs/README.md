@@ -157,7 +157,7 @@ La v1 écrit 6 % d'octets en plus (la réserve). Même avec la machine ralentie,
 ## Limites connues
 
 - **Aucun audit externe.**
-- Le fuzzing tourne en Rust stable par mutations. `cargo-fuzz` (avec mesure de couverture) demande la toolchain nightly, qui n'est pas installée.
+- Le fuzzing guidé par la couverture (cargo-fuzz, chaîne nightly) tourne chaque nuit en CI, en plus des mutations de `tests/fuzz.rs` (docs/08, § 3).
 - **Preuves papier** : déni ([docs/04](../docs/04-preuve-deux-visages.md)), intégrité ([docs/05](../docs/05-preuve-integrite.md)) et confidentialité face aux fichiers piégés ([docs/06](../docs/06-preuve-confidentialite-active.md)). Aucune n'est vérifiée par machine ni relue par un tiers.
 - **IND-RCCA, pas IND-CCA** : on peut fabriquer une autre version d'un fichier qui donne exactement le même clair, en modifiant la réserve ou l'étiquette de l'autre visage. On ne peut pas en fabriquer une qui donne un clair lié. C'est inévitable avec deux visages (docs/06, § 1).
 - **`dechiffrer_flux` écrit les lots vérifiés au fur et à mesure** : un programme qui l'utilise doit jeter toute la sortie si la fonction échoue. La ligne de commande et `dechiffrer` le font déjà (docs/06, § 5).
